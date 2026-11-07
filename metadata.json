@@ -1,0 +1,6 @@
+{
+  "name": "Sapiens: Dawn of Humankind",
+  "description": "An interactive 3D historical simulation game based on Yuval Noah Harari's Sapiens. Guide humanity through the Cognitive, Agricultural, and Scientific Revolutions with strategic choices, quests, and generative AI historical visualization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
