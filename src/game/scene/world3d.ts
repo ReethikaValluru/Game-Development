@@ -83,6 +83,7 @@ export class World3D {
   private reducedMotion = false;
   private quality: 'low' | 'high' = 'low';
   private tutorialMode = false;
+  private currentEra: HistoricalEra = "cognitive";
   private sprintEnergy = 100;
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private currentLandscape: SapiensLandscape = 'river_meadow';
@@ -170,9 +171,12 @@ export class World3D {
       | ((type: 'flint' | 'berries' | 'ivory' | 'amber') => void)
       | World3DCallbacks,
     onJumpLegacy?: () => void,
-    onSlideLegacy?: () => void
+    onSlideLegacy?: () => void,
+    initialWorld?: {era: HistoricalEra; landscape: SapiensLandscape}
   ) {
     this.container = container;
+    this.currentEra = initialWorld?.era ?? "cognitive";
+    this.currentLandscape = initialWorld?.landscape ?? "river_meadow";
 
     if (typeof onPickupOrCallbacks === 'function') {
       this.callbacks = {
@@ -280,6 +284,7 @@ export class World3D {
     window.addEventListener('resize', this.onWindowResize);
 
     // 11. Start 60fps Loop
+    this.setLandscape(this.currentLandscape);
     this.startLoop();
   }
 
@@ -347,6 +352,8 @@ export class World3D {
     if (this.currentLandscape === 'wetland_oasis') trailColor = 0x8a927d; // Mossy riverside flagstone
     if (this.currentLandscape === 'mountain_pass') trailColor = 0x8f8476; // Mountain stone trail
 
+    if(this.currentEra === "agricultural") trailColor=0xbc995e;
+    if(this.currentEra === "scientific") trailColor=0x556781;
     const trailMat = new THREE.MeshStandardMaterial({
       color: trailColor,
       roughness: 0.88,
@@ -421,6 +428,7 @@ export class World3D {
       seg.add(rightFlowers);
     }
 
+    if(this.currentEra === "cognitive") {
     // 5. Sunlit Oak & Cedar Trees framing the canopy (Image 2 & 3)
     for (let t = -14; t <= 14; t += 12) {
       const leftTree = this.createSunlitCanopyTree();
@@ -432,11 +440,13 @@ export class World3D {
       seg.add(rightTree);
     }
 
+    } else { this.addChapterSettlement(seg); }
+
     // Sculpted banks, luminous fungi and ochre trail inlays frame the playable lanes.
     const glow = new THREE.MeshStandardMaterial({color:0x9ff5d2, emissive:0x52d9bd, emissiveIntensity:0.8, roughness:0.5});
     const earth = new THREE.MeshStandardMaterial({color:0x75556e, roughness:1});
     for (const side of [-1, 1]) {
-      for (let i=0;i<4;i++) {
+      for (let i=0;i<(this.currentEra === "cognitive" ? 4 : 1);i++) {
         const z = -15+i*9;
         const mound = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,1), earth);
         mound.scale.set(1.5,0.45,1.8); mound.position.set(side*6.8,-0.2,z); seg.add(mound);
@@ -459,6 +469,40 @@ export class World3D {
     }
 
     return seg;
+  }
+
+  private addChapterSettlement(seg: THREE.Group) {
+    const agricultural=this.currentEra==='agricultural';
+    const stone=new THREE.MeshStandardMaterial({color:agricultural?0xd8b588:0xa5b8cd,roughness:.9});
+    const roof=new THREE.MeshStandardMaterial({color:agricultural?0x977042:0x527c9b,roughness:.8});
+    const light=new THREE.MeshStandardMaterial({color:0xffdc91,emissive:0xffb651,emissiveIntensity:.8});
+    for(const side of [-1,1])for(let i=0;i<3;i++){
+      const group=new THREE.Group();group.position.set(side*(agricultural?9:10),0,-13+i*13);
+      if(agricultural){
+        const hut=new THREE.Mesh(new THREE.CylinderGeometry(1.65,1.9,2.4,9),stone);hut.position.y=1.2;group.add(hut);
+        const thatch=new THREE.Mesh(new THREE.ConeGeometry(2.3,2,9),roof);thatch.position.y=3.2;group.add(thatch);
+        const door=new THREE.Mesh(new THREE.BoxGeometry(.65,1.4,.12),roof);door.position.set(0,.7,1.85);group.add(door);
+        // Grain rows use one instanced draw call per field.
+        const grain=new THREE.InstancedMesh(new THREE.ConeGeometry(.09,.9,4),light,36);
+        const transform=new THREE.Object3D();
+        for(let n=0;n<36;n++){transform.position.set(-2.4+(n%6)*.4,.45,3+Math.floor(n/6)*.5);transform.updateMatrix();grain.setMatrixAt(n,transform.matrix);}
+        group.add(grain);
+        const jar=new THREE.Mesh(new THREE.SphereGeometry(.45,8,6),roof);jar.scale.y=1.4;jar.position.set(2.2,.6,1);group.add(jar);
+      }else{
+        const platform=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.5,.6,12),stone);platform.position.y=.3;group.add(platform);
+        if(i===1){
+          const tower=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.8,3.5,12),stone);tower.position.y=2;group.add(tower);
+          const dome=new THREE.Mesh(new THREE.SphereGeometry(1.8,16,10,0,Math.PI*2,0,Math.PI/2),roof);dome.position.y=3.75;group.add(dome);
+        }else{
+          const axis=new THREE.Mesh(new THREE.CylinderGeometry(.12,.25,2.8,8),stone);axis.position.y=1.7;group.add(axis);
+          for(let ring=0;ring<3;ring++){
+            const orbit=new THREE.Mesh(new THREE.TorusGeometry(1.2,.045,5,32),light);orbit.position.y=2.6;orbit.rotation.set(ring*.7,.4+ring*.65,0);group.add(orbit);
+          }
+          const star=new THREE.Mesh(new THREE.OctahedronGeometry(.25),light);star.position.y=2.6;group.add(star);
+        }
+      }
+      seg.add(group);
+    }
   }
 
   // Water Lily Pad with Lotus Blossom (From Monet-inspired Image 1)
@@ -1321,7 +1365,7 @@ export class World3D {
   }
 
   private handleObstacleHit() {
-    if (this.tutorialMode || this.isPaused) return;
+    if (this.isPaused) return;
     const shielded = this.activePowerUp === 'shield' || this.activePowerUp === 'surge';
     if (shielded) {
       this.activePowerUp=null; this.powerUpTimeLeft=0;
@@ -1399,7 +1443,13 @@ export class World3D {
     if (paused) this.isTouching = false;
   }
 
-  public setEra(_era: HistoricalEra) {}
+  public setEra(era: HistoricalEra) {
+    if(this.currentEra===era)return;
+    this.currentEra=era;
+    this.pickups=[];this.obstacles=[];this.powerUps=[];this.dilemmaGates=[];
+    for(const old of this.trackSegments){this.scene.remove(old);this.releaseObject(old);}
+    this.trackSegments=[];this.initTrack();this.setLandscape(this.currentLandscape);
+  }
 
   public setLandscape(landscape: SapiensLandscape) {
     this.currentLandscape = landscape;
@@ -1430,6 +1480,8 @@ export class World3D {
       hemiGround = 0x5a7d36;
     }
 
+    if(this.currentEra==='agricultural'){skyHex=0xb99a78;sunHex=0xffd090;sunInt=2;hemiSky=0xffe0ab;hemiGround=0x83613d;}
+    if(this.currentEra==='scientific'){skyHex=0x192c50;sunHex=0xb9d8ff;sunInt=1.2;hemiSky=0x7dace2;hemiGround=0x484a70;}
     this.scene.background = new THREE.Color(skyHex);
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.color = new THREE.Color(skyHex);

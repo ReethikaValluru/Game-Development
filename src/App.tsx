@@ -206,7 +206,7 @@ export default function App() {
             )
               setMenu("council");
           },
-        });
+        }, undefined, undefined, {era:current.current.era,landscape:current.current.landscape});
         world.current = instance;
         instance.setTitleMode(false);
         instance.setLandscape(current.current.landscape);
@@ -266,9 +266,9 @@ export default function App() {
     };
   }, [epoch, screen]);
   useEffect(() => {
-    soundEngine.setMusic(!paused && !settings.muted);
+    soundEngine.setMusic(!paused && !settings.muted, s.era);
     return () => soundEngine.stopMusic();
-  }, [paused, settings.muted]);
+  }, [paused, settings.muted, s.era]);
   useEffect(() => {
     if(!dead)return;
     const timer=setTimeout(()=>{

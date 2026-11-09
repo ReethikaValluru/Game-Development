@@ -33,11 +33,11 @@ export function TitleScreen({
     <section
       className="title-screen"
       style={{
-        backgroundImage: `linear-gradient(90deg,rgba(12,20,17,.97),rgba(12,20,17,.5)),url(${LANDSCAPE_ART[landscape]})`,
+        backgroundImage: `linear-gradient(90deg,rgba(12,20,17,.97),rgba(12,20,17,.5)),url(/assets/chapters/${era}.svg)`,
       }}
     >
       <div className="title-copy">
-        <p className="eyebrow">A journey through human history</p>
+        <p className="eyebrow">{era === "cognitive" ? "The enchanted wilderness" : era === "agricultural" ? "The golden settlement" : "The starlit observatory"}</p>
         <h1>
           SAPIENS<span>Dawn of Humankind</span>
         </h1>

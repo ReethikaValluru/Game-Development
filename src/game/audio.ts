@@ -8,7 +8,7 @@ class SoundEngine {
 
   private musicTimer: ReturnType<typeof setInterval> | null = null;
   private musicBus: GainNode | null = null;
-  public setMusic(playing: boolean) {
+  public setMusic(playing: boolean, era: "cognitive" | "agricultural" | "scientific" = "cognitive") {
     this.stopMusic();
     if (!playing || this.isMuted) return;
     this.initContext();
@@ -20,7 +20,7 @@ class SoundEngine {
       o.type=type;o.frequency.value=hz;g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+duration);
       o.connect(g);g.connect(bus);o.start(t);o.stop(t+duration+.02);o.onended=()=>{o.disconnect();g.disconnect();};
     };
-    const melody=[0,7,12,14,7,4,2,7,0,4,7,16,14,12,7,2];
+    const melody=era==="scientific"?[0,7,14,19,12,7,4,14,0,12,16,19,14,7,4,2]:era==="agricultural"?[0,4,7,12,7,4,9,7,5,9,12,16,12,9,7,4]:[0,7,12,14,7,4,2,7,0,4,7,16,14,12,7,2];
     const tick=()=>{
       if(ctx.state!=='running')return;
       voice(220*Math.pow(2,melody[beat%16]/12),.42,.28,'triangle');
@@ -28,7 +28,7 @@ class SoundEngine {
       voice(beat%4===0?65:130,.09,beat%4===0?.65:.22,'triangle');
       if(beat%8===0)voice(440,.95,.12);
       beat++;
-    };tick();this.musicTimer=setInterval(tick,312.5);
+    };tick();this.musicTimer=setInterval(tick,era==="scientific"?350:era==="agricultural"?280:312.5);
   }
   public stopMusic() {
     if(this.musicTimer)clearInterval(this.musicTimer);this.musicTimer=null;

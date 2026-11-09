@@ -77,7 +77,7 @@ export function PlayHUD({
         <div className="tutorial" role="status">
           <strong>Learn the trail · {s.tutorialStep + 1}/4</strong>
           <p>{tutorials[s.tutorialStep]}</p>
-          <small>Protected from collisions while learning.</small>
+          <small>Two obstacle impacts return you to the start.</small>
           <button onClick={onSkip}>Skip tutorial</button>
         </div>
       )}
@@ -86,7 +86,7 @@ export function PlayHUD({
           {[
             ["council", "Council"],
             ["research", "Research"],
-            ["journal", "Journal"],
+            ["journal", "Quests & facts"],
             ["ai", "AI studio"],
           ].map(([id, name]) => (
             <button key={id} onClick={() => onMenu(id)}>
