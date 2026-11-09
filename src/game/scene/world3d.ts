@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { HistoricalEra, LandmarkInfo, SapiensLandscape } from '../../types/game';
+import { HistoricalEra, LandmarkInfo, SapiensLandscape, RunStats } from '../../types/game';
 import { WORLD_LANDMARKS } from '../rules';
 
 export interface World3DControls {
@@ -80,6 +80,11 @@ export class World3D {
   private animFrameId: number = 0;
   private isTitleMode: boolean = true;
   private isPaused = false;
+  private reducedMotion = false;
+  private quality: 'low' | 'high' = 'low';
+  private tutorialMode = false;
+  private sprintEnergy = 100;
+  private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private currentLandscape: SapiensLandscape = 'river_meadow';
   private currentWeather: 'clear_sun' | 'rain' | 'storm' | 'mist' = 'clear_sun';
   private weatherActive: boolean = false;
@@ -108,8 +113,8 @@ export class World3D {
   private activeAnimalMigration: 'mammoths' | 'gazelles' | null = null;
 
   // Physics & Locomotion
-  private baseSpeed: number = 17.0;
-  private currentSpeed: number = 17.0;
+  private baseSpeed: number = 10.0;
+  private currentSpeed: number = 10.0;
   private distanceTraveled: number = 0;
   private isJumping: boolean = false;
   private jumpTimer: number = 0;
@@ -223,7 +228,10 @@ export class World3D {
 
     // 4. Studio Environment Lighting
     const pmremGen = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmremGen.fromScene(new RoomEnvironment()).texture;
+    const room = new RoomEnvironment();
+    this.environmentTarget = pmremGen.fromScene(room);
+    this.scene.environment = this.environmentTarget.texture;
+    room.dispose();
     pmremGen.dispose();
 
     // Warm Golden Sun (Morning sun filtering through canopy like Image 3)
@@ -356,7 +364,7 @@ export class World3D {
     const meadowGeo = new THREE.PlaneGeometry(45, World3D.SEGMENT_LENGTH);
     meadowGeo.rotateX(-Math.PI / 2);
     const meadowMat = new THREE.MeshStandardMaterial({
-      color: 0x4a7c2c, // Rich vibrant green grass
+      color: this.currentLandscape === 'mountain_pass' ? 0x696d57 : this.currentLandscape === 'wetland_oasis' ? 0x375f50 : 0x4a7c2c,
       roughness: 0.9,
     });
 
@@ -384,6 +392,8 @@ export class World3D {
     for (let l = -12; l <= 12; l += 7) {
       const lilyPad = this.createWaterLilyCluster();
       lilyPad.position.set(7.8 + (Math.random() - 0.5) * 2.2, -0.08, l + (Math.random() - 0.5) * 2);
+      lilyPad.userData.detail = true;
+      lilyPad.visible = this.quality === 'high';
       seg.add(lilyPad);
     }
 
@@ -392,11 +402,15 @@ export class World3D {
       // Left flower bed
       const leftFlowers = this.createWildflowerCluster();
       leftFlowers.position.set(-4.8 - Math.random() * 2.5, 0, f);
+      leftFlowers.userData.detail = true;
+      leftFlowers.visible = this.quality === 'high';
       seg.add(leftFlowers);
 
       // Right bank flower bed
       const rightFlowers = this.createWildflowerCluster();
       rightFlowers.position.set(4.8 + Math.random() * 2.2, 0, f);
+      rightFlowers.userData.detail = true;
+      rightFlowers.visible = this.quality === 'high';
       seg.add(rightFlowers);
     }
 
@@ -922,7 +936,7 @@ export class World3D {
     };
 
     const onEnd = (clientX: number, clientY: number) => {
-      if (!this.isTouching || this.isTitleMode) return;
+      if (!this.isTouching || this.isTitleMode || this.isPaused) return;
       this.isTouching = false;
 
       const dx = clientX - this.touchStartX;
@@ -950,6 +964,8 @@ export class World3D {
       }
     };
 
+    dom.style.touchAction = 'none';
+    dom.addEventListener('pointercancel', () => { this.isTouching = false; });
     dom.addEventListener('pointerdown', e => onStart(e.clientX, e.clientY));
     dom.addEventListener('pointerup', e => onEnd(e.clientX, e.clientY));
   }
@@ -1017,7 +1033,9 @@ export class World3D {
       this.triggerSlide();
       controls.slide = false;
     }
-    this.isSprinting = !!controls.sprint;
+    this.respawnInvulnerableTimer = Math.max(0,this.respawnInvulnerableTimer-dt);
+    this.isSprinting = !!controls.sprint && this.sprintEnergy > 0;
+    this.sprintEnergy = Math.max(0,Math.min(100,this.sprintEnergy+(this.isSprinting?-25:12)*dt));
 
     // Power-Up Countdown
     if (this.activePowerUp && this.powerUpTimeLeft > 0) {
@@ -1029,7 +1047,7 @@ export class World3D {
     }
 
     // Dynamic Speed
-    let targetSpeed = this.baseSpeed + Math.min(8.0, this.distanceTraveled * 0.005);
+    let targetSpeed = this.baseSpeed + Math.min(6.0, this.distanceTraveled * 0.0015);
     if (this.isSprinting) targetSpeed *= 1.35;
     if (this.activePowerUp === 'surge') targetSpeed *= 1.5;
 
@@ -1073,7 +1091,7 @@ export class World3D {
     this.playerGroup.position.set(this.playerX, this.playerY, this.playerZ);
 
     const lateralVel = this.playerTargetX - this.playerX;
-    this.playerGroup.rotation.z = -lateralVel * 0.12;
+    this.playerGroup.rotation.z = this.reducedMotion ? 0 : -lateralVel * 0.12;
 
     // Leg Swings
     const legFreq = this.currentSpeed * 0.7;
@@ -1117,7 +1135,7 @@ export class World3D {
     }
     this.beastDistance += (this.beastTargetDistance - this.beastDistance) * dt * 3.5;
     this.beastGroup.position.set(this.playerX * 0.85, 0, this.playerZ + this.beastDistance);
-    this.beastGroup.position.y = Math.abs(Math.sin(Date.now() * 0.015 * legFreq)) * 0.35;
+    this.beastGroup.position.y = this.reducedMotion ? 0 : Math.abs(Math.sin(Date.now() * 0.015 * legFreq)) * 0.35;
 
     // Cycle Track Segments
     for (let i = 0; i < this.trackSegments.length; i++) {
@@ -1126,6 +1144,7 @@ export class World3D {
         seg.position.z = this.nextSegmentZ;
         this.nextSegmentZ -= World3D.SEGMENT_LENGTH;
 
+        this.releaseObject(seg);
         while (seg.children.length > 0) {
           seg.remove(seg.children[0]);
         }
@@ -1141,6 +1160,7 @@ export class World3D {
 
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const p = this.pickups[i];
+      if (p.z > this.playerZ + 25) { this.pickups.splice(i,1); continue; }
       if (p.completed) continue;
 
       if (isMagnetActive) {
@@ -1167,6 +1187,7 @@ export class World3D {
     // Power-Ups
     for (let i = this.powerUps.length - 1; i >= 0; i--) {
       const pw = this.powerUps[i];
+      if (pw.z > this.playerZ + 25) { this.powerUps.splice(i,1); continue; }
       if (pw.collected) continue;
 
       const laneX = pw.lane * World3D.LANE_WIDTH;
@@ -1189,6 +1210,7 @@ export class World3D {
     // Obstacle Collisions
     for (let i = this.obstacles.length - 1; i >= 0; i--) {
       const obs = this.obstacles[i];
+      if (obs.z > this.playerZ + 25) { this.obstacles.splice(i,1); continue; }
       if (obs.cleared || obs.hit) continue;
 
       const obsX = obs.lane * World3D.LANE_WIDTH;
@@ -1221,6 +1243,7 @@ export class World3D {
     // Dilemma Gates
     for (let i = this.dilemmaGates.length - 1; i >= 0; i--) {
       const gate = this.dilemmaGates[i];
+      if (gate.z > this.playerZ + 25) { this.dilemmaGates.splice(i,1); continue; }
       if (gate.passed) continue;
 
       if (this.playerZ < gate.z && gate.z - this.playerZ < 2.0) {
@@ -1246,12 +1269,13 @@ export class World3D {
 
     this.camera.lookAt(this.playerX * 0.7, this.playerY + 1.35, this.playerZ - 8.5);
 
-    const targetFov = this.activePowerUp === 'surge' ? 68 : this.isSprinting ? 62 : 56;
+    const targetFov = this.reducedMotion ? 56 : this.activePowerUp === 'surge' ? 68 : this.isSprinting ? 62 : 56;
     this.camera.fov += (targetFov - this.camera.fov) * dt * 5;
     this.camera.updateProjectionMatrix();
   }
 
   private handleObstacleHit() {
+    if (this.tutorialMode || this.respawnInvulnerableTimer > 0) return;
     if (this.activePowerUp === 'shield' || this.activePowerUp === 'surge') {
       this.activePowerUp = null;
       this.powerUpTimeLeft = 0;
@@ -1262,6 +1286,14 @@ export class World3D {
       return;
     }
 
+    this.bumpCount += 1;
+    if (this.bumpCount >= 2) {
+      this.bumpCount = 0;
+      this.respawnInvulnerableTimer = 2;
+      this.currentLane = 0;
+      this.playerTargetX = 0;
+      this.callbacks.onRespawn?.();
+    }
     this.beastAlertTimer = 5.0;
     if (this.callbacks.onBeastAlert) {
       this.callbacks.onBeastAlert(true);
@@ -1403,24 +1435,42 @@ export class World3D {
     return this.distanceTraveled;
   }
 
+  public setTutorialMode(enabled: boolean) { this.tutorialMode = enabled; }
+
+  public setReducedMotion(enabled: boolean) { this.reducedMotion = enabled; }
+
+  public setQuality(quality: 'low' | 'high') {
+    this.quality = quality;
+    this.renderer.setPixelRatio(quality === 'low' || this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 1.5));
+    this.renderer.shadowMap.enabled = quality === 'high' && !this.isSoftwareGl;
+    this.scene.traverse(object => { if(object.userData.detail) object.visible = quality === 'high'; });
+  }
+
+  public getRunnerSnapshot(): Partial<RunStats> {
+    return {currentLane:this.currentLane, activePowerUp:this.activePowerUp,
+      powerUpTimeLeft:Math.max(0,this.powerUpTimeLeft), sprintEnergy:this.sprintEnergy,
+      bumpCount:this.bumpCount, isRespawning:this.respawnInvulnerableTimer>0,
+      beastAlert:this.beastAlertTimer>0};
+  }
+
+  private releaseObject(root: THREE.Object3D) {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    root.traverse(object => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) geometries.add(mesh.geometry);
+      if (mesh.material) for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(material);
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    materials.forEach(material => material.dispose());
+  }
+
   public dispose() {
     cancelAnimationFrame(this.animFrameId);
     clearTimeout(this.animFrameId);
     window.removeEventListener('resize', this.onWindowResize);
-    const geometries = new Set<THREE.BufferGeometry>();
-    const materials = new Set<THREE.Material>();
-    this.scene.traverse(object => {
-      const mesh = object as THREE.Mesh;
-      if (mesh.geometry) geometries.add(mesh.geometry);
-      if (mesh.material) {
-        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-          materials.add(material);
-        }
-      }
-    });
-    geometries.forEach(geometry => geometry.dispose());
-    materials.forEach(material => material.dispose());
-    this.scene.environment?.dispose();
+    this.releaseObject(this.scene);
+    this.environmentTarget?.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement && this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
