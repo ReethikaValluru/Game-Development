@@ -6,6 +6,13 @@ import {
   CodexEntry,
   Quest,
   DilemmaChoice,
+  ImaginedOrder,
+  LandmarkInfo,
+  MegafaunaState,
+  Achievement,
+  RunStats,
+  SapiensLandscape,
+  DynamicWorldEvent,
 } from '../types/game';
 
 export const INITIAL_RESOURCES: GameResources = {
@@ -577,3 +584,531 @@ export function checkVictoryCondition(unlockedTechIds: string[], res: GameResour
 export function checkDefeatCondition(res: GameResources): boolean {
   return res.population <= 3 || (res.calories === 0 && res.population < 10);
 }
+
+export const INITIAL_MEGAFAUNA: MegafaunaState = {
+  count: 4,
+  maxCount: 4,
+  isExtinct: false,
+  extinctionReflected: false,
+};
+
+export const INITIAL_IMAGINED_ORDERS: ImaginedOrder[] = [
+  {
+    id: 'order_animism',
+    era: 'cognitive',
+    name: 'Animism & Spirit Guardians',
+    mantra: 'Every rock, tree, and beast possesses a sentient soul.',
+    description: 'The world is an egalitarian community of living beings. Humankind does not sit atop a hierarchy.',
+    harariQuote: 'Foragers lived in an animist world where there was no clear barrier between human beings and other animals.',
+    dunbarBonus: 50,
+    mythCost: 15,
+    perkDescription: '+50 Dunbar threshold, +15% gathering yields from natural harmony.',
+    active: true,
+  },
+  {
+    id: 'order_lion_man',
+    era: 'cognitive',
+    name: 'Totem of the Lion-Man',
+    mantra: 'The lion spirit protects all bands who wear the sacred ivory amulet.',
+    description: 'First collective myth transcending biological kin, forging alliances between distant bands.',
+    harariQuote: 'Any monkey can say "Look, a lion!" Only Sapiens can say "The lion is the guardian spirit of our tribe."',
+    dunbarBonus: 120,
+    mythCost: 40,
+    perkDescription: '+120 Dunbar threshold, unlocks megafauna hunting coordination.',
+    active: false,
+  },
+  {
+    id: 'order_divine_sun_king',
+    era: 'agricultural',
+    name: 'The Divine Sun-King',
+    mantra: 'The monarch is ordained by heaven; to rebel is to defy the cosmos.',
+    description: 'Massive imagined order creating divine hierarchy to enforce justice and taxation across thousands.',
+    harariQuote: 'Hammurabi and the American Founding Fathers both imagined an order based on eternal, universal principles of justice.',
+    dunbarBonus: 450,
+    mythCost: 75,
+    perkDescription: '+450 Dunbar threshold, +30% agricultural grain output, prevents tribal fractures.',
+    active: false,
+  },
+  {
+    id: 'order_universal_money',
+    era: 'agricultural',
+    name: 'Universal Trust of Money',
+    mantra: 'In gold and silver we place our shared faith.',
+    description: 'The most universal system of mutual trust ever conceived, uniting strangers across religious and imperial borders.',
+    harariQuote: 'Money is the only trust system created by humans that can bridge almost any cultural gap, and does not discriminate.',
+    dunbarBonus: 1000,
+    mythCost: 110,
+    perkDescription: '+1000 Dunbar threshold, frictionless trade, amasses wealth and knowledge.',
+    active: false,
+  },
+  {
+    id: 'order_humanism_science',
+    era: 'scientific',
+    name: 'Empirical Humanism & Scientism',
+    mantra: 'We admit our ignorance; through empirical inquiry and human empathy we master the cosmos.',
+    description: 'The modern order recognizing ignorance, seeking testable truth, and enshrining inalienable human dignity.',
+    harariQuote: 'The willingness to admit ignorance has made modern science much more dynamic, pliable and inquisitive than any previous tradition of knowledge.',
+    dunbarBonus: 3000,
+    mythCost: 160,
+    perkDescription: '+3000 Dunbar threshold, eliminates all social friction, accelerates discoveries.',
+    active: false,
+  },
+];
+
+export const WORLD_LANDMARKS: LandmarkInfo[] = [
+  {
+    id: 'campfire',
+    name: 'Sacred Campfire Hearth',
+    title: 'The Hearth of Stories',
+    actionText: 'Commune & Shape Imagined Orders',
+    description: 'Where our ancestors roasted roots, predigested calories, and sat under the stars inventing stories that conquered the world.',
+    harariContext: 'Campfire cooking shrank our intestines and teeth while fueling a metabolically ravenous 1,400cc brain.',
+    x: 0,
+    z: 0,
+  },
+  {
+    id: 'mammoth',
+    name: 'Megafauna Steppe Herd',
+    title: 'The Woolly Giants',
+    actionText: 'Coordinate Megafauna Hunt',
+    description: 'Massive mammoths roam the cold steppe. Coordinated hunting with spear throwers yields mountain of meat, but risks ecological wipeout.',
+    harariContext: 'Wherever Sapiens arrived—in Australia, the Americas, and Eurasia—giant terrestrial animals disappeared forever within centuries.',
+    x: 15,
+    z: -12,
+  },
+  {
+    id: 'megaliths',
+    name: 'Göbekli Tepe Sanctuary',
+    title: 'The First Temple',
+    actionText: 'Engrave Sacred Limestone Reliefs',
+    description: 'Monumental T-shaped pillars erected by hunter-gatherers thousands of years before agriculture. Myth built religion before farming built villages.',
+    harariContext: 'Archaeologists were stunned by Göbekli Tepe: cultural belief and temple construction catalyzed agriculture, not the other way around.',
+    x: -16,
+    z: -14,
+  },
+  {
+    id: 'wheat',
+    name: 'Emmer Wheat Fields',
+    title: 'The Luxury Trap',
+    actionText: 'Cultivate & Weed the Soil',
+    description: 'Golden stalks of emmer wheat. Demands backbreaking dawn-to-dusk toil, but yields vast caloric surpluses that feed exploding populations.',
+    harariContext: 'Wheat demanded 24/7 care. Our spine, knees, and neck were never evolved for hoeing, yet wheat conquered more global acreage than any wild grass.',
+    x: 14,
+    z: 8,
+  },
+  {
+    id: 'cave',
+    name: 'Cave of Hands & Totems',
+    title: 'The Painted Sanctuary',
+    actionText: 'Inscribe Clan History on Rock',
+    description: 'Torchlit limestone rock shelter displaying hand stencils, galloping steppe bison, and the Stadel Lion-Man carving.',
+    harariContext: 'Cave art was not interior decoration; it was the sacred matrix of humanity\'s first collective imagination.',
+    x: -24,
+    z: 2,
+  },
+];
+
+export function executeHuntMegafauna(
+  megafauna: MegafaunaState,
+  resources: GameResources
+): {
+  success: boolean;
+  newMegafauna: MegafaunaState;
+  newResources: GameResources;
+  message: string;
+} {
+  if (megafauna.count <= 0) {
+    return {
+      success: false,
+      newMegafauna: { ...megafauna, isExtinct: true },
+      newResources: resources,
+      message: 'The megafauna is extinct in this region. As Harari wrote in Chapter 4, the giant beasts never recovered from humankind\'s arrival.',
+    };
+  }
+
+  // Cost: requires some flint & stone for spears
+  const flintCost = 15;
+  if (resources.flintAndStone < flintCost) {
+    return {
+      success: false,
+      newMegafauna: megafauna,
+      newResources: resources,
+      message: 'Insufficient flint spear points! Knap at least 15 flint tools to coordinate an ambush.',
+    };
+  }
+
+  const remaining = megafauna.count - 1;
+  const isNowExtinct = remaining <= 0;
+
+  const meatYield = 180;
+  const ivoryYield = 40;
+
+  const updatedResources: GameResources = {
+    ...resources,
+    calories: resources.calories + meatYield,
+    flintAndStone: resources.flintAndStone - flintCost + ivoryYield,
+    knowledge: resources.knowledge + 12,
+  };
+
+  const updatedMegafauna: MegafaunaState = {
+    ...megafauna,
+    count: remaining,
+    isExtinct: isNowExtinct,
+    extinctionReflected: isNowExtinct,
+  };
+
+  const message = isNowExtinct
+    ? 'Massive hunt successful! +180 Calories and +40 Ivory. But the last mammoth has fallen. Megafauna extinction in this territory is complete.'
+    : `Hunt successful! Coordinated hunters brought down a mammoth (+180 Calories, +40 Ivory). ${remaining} herds remain on the steppe.`;
+
+  return {
+    success: true,
+    newMegafauna: updatedMegafauna,
+    newResources: updatedResources,
+    message,
+  };
+}
+
+export function consecrateImaginedOrder(
+  orders: ImaginedOrder[],
+  selectedId: string,
+  resources: GameResources
+): {
+  success: boolean;
+  newOrders: ImaginedOrder[];
+  newResources: GameResources;
+  message: string;
+} {
+  const target = orders.find(o => o.id === selectedId);
+  if (!target) {
+    return { success: false, newOrders: orders, newResources: resources, message: 'Order not found.' };
+  }
+
+  if (resources.mythPower < target.mythCost) {
+    return {
+      success: false,
+      newOrders: orders,
+      newResources: resources,
+      message: `Insufficient Shared Myth! Needs ${target.mythCost} Myth Power to consecrate "${target.name}".`,
+    };
+  }
+
+  const newOrders = orders.map(o => ({
+    ...o,
+    active: o.id === selectedId,
+  }));
+
+  const newResources: GameResources = {
+    ...resources,
+    mythPower: resources.mythPower - target.mythCost,
+    dunbarLimit: Math.max(150, resources.dunbarLimit + target.dunbarBonus),
+  };
+
+  return {
+    success: true,
+    newOrders,
+    newResources,
+    message: `The tribe now lives under the imagined order: "${target.name}"! Dunbar Limit increased by +${target.dunbarBonus}.`,
+  };
+}
+
+export const INITIAL_ACHIEVEMENTS: Achievement[] = [
+  {
+    id: 'first_forage',
+    title: 'The Forager\'s Intuition',
+    description: 'Gather wild berries, amber gems, or flint nodules in the steppe.',
+    icon: '🌾',
+    era: 'cognitive',
+    funFact: 'Paleolithic foragers possessed encyclopedic mental maps of thousands of plants, seasons, and animal tracks, working only ~30 hours weekly.',
+    unlocked: false,
+  },
+  {
+    id: 'dunbar_breaker',
+    title: 'Breaking Dunbar\'s Limit',
+    description: 'Grow the clan beyond 150 members without social fragmentation.',
+    icon: '👥',
+    era: 'cognitive',
+    funFact: 'Primatologist Robin Dunbar showed that human brains can maintain stable personal social relationships with only ~150 people before shared myths are needed.',
+    unlocked: false,
+  },
+  {
+    id: 'ivory_totem',
+    title: 'The Stadel Lion-Man',
+    description: 'Unlock Shared Myth & Totemism or carve the lion-human ivory amulet.',
+    icon: '🦁',
+    era: 'cognitive',
+    funFact: 'Found in a German cave, the 40,000-year-old Lion-Man carved from mammoth tusk is humankind\'s earliest undisputed proof of abstract religious fiction.',
+    unlocked: false,
+  },
+  {
+    id: 'megafauna_down',
+    title: 'Megafauna Hunter',
+    description: 'Coordinate a successful hunt against giant woolly mammoths.',
+    icon: '🦣',
+    era: 'cognitive',
+    funFact: 'Wherever Sapiens settled—Australia, the Americas, and Eurasia—over 70% of all large terrestrial animal species vanished within a few thousand years.',
+    unlocked: false,
+  },
+  {
+    id: 'luxury_trap',
+    title: 'History\'s Biggest Fraud',
+    description: 'Domesticate emmer wheat and enter the Agricultural Revolution.',
+    icon: '🍞',
+    era: 'agricultural',
+    funFact: 'Wheat forced humans to trade varied diets and healthy nomadic spines for backbreaking dawn-to-dusk field labor, malnutrition, and infectious diseases.',
+    unlocked: false,
+  },
+  {
+    id: 'hammurabi_law',
+    title: 'The Code of the King',
+    description: 'Codify divine legal orders to govern thousands of citizens.',
+    icon: '⚖️',
+    era: 'agricultural',
+    funFact: 'Hammurabi\'s Code was an imagined order: it claimed divine origin so 1,000,000 citizens would accept social stratification as eternal cosmic truth.',
+    unlocked: false,
+  },
+  {
+    id: 'universal_shekel',
+    title: 'The Universal Trust of Money',
+    description: 'Establish financial currency to bridge disparate cultures.',
+    icon: '🪙',
+    era: 'agricultural',
+    funFact: 'Money is the only trust system created by humans that can bridge almost any cultural gap, and does not discriminate on religion, race, or king.',
+    unlocked: false,
+  },
+  {
+    id: 'ignoramus',
+    title: 'The Discovery of Ignorance',
+    description: 'Admit ignorance and unlock the Scientific Method.',
+    icon: '🔭',
+    era: 'scientific',
+    funFact: 'Pre-modern maps had no blank spaces. The Scientific Revolution began the moment Europeans drew blank ocean maps with the courage to say: "We do not know."',
+    unlocked: false,
+  },
+  {
+    id: 'savannah_sprinter',
+    title: 'Savannah Sprinter',
+    description: 'Achieve a 5x or higher combo streak while navigating obstacles.',
+    icon: '⚡',
+    era: 'cognitive',
+    funFact: 'Humans are the greatest endurance runners in the animal kingdom; our sweat glands and bipedal stride let our ancestors run antelopes to exhaustion.',
+    unlocked: false,
+  },
+  {
+    id: 'apex_agility',
+    title: 'Apex Agility',
+    description: 'Perform acrobatic jumps and slides through the prehistoric steppe.',
+    icon: '🏃',
+    era: 'cognitive',
+    funFact: 'Skeletal remains reveal that prehistoric foragers had denser leg bones, better posture, and greater physical symmetry than post-industrial humans.',
+    unlocked: false,
+  },
+];
+
+export function checkNewAchievements(
+  resources: GameResources,
+  unlockedTechs: string[],
+  stats: RunStats,
+  currentAchievements: Achievement[],
+  _turnCount: number
+): {
+  updatedAchievements: Achievement[];
+  newlyUnlocked: Achievement[];
+} {
+  const newlyUnlocked: Achievement[] = [];
+
+  const updatedAchievements = currentAchievements.map(ach => {
+    if (ach.unlocked) return ach;
+
+    let shouldUnlock = false;
+
+    switch (ach.id) {
+      case 'first_forage':
+        shouldUnlock = stats.pickupsCollected >= 1;
+        break;
+      case 'dunbar_breaker':
+        shouldUnlock = resources.population > 150;
+        break;
+      case 'ivory_totem':
+        shouldUnlock = unlockedTechs.includes('shared_fiction') || resources.mythPower >= 50;
+        break;
+      case 'megafauna_down':
+        shouldUnlock = resources.flintAndStone >= 60 && resources.calories >= 250;
+        break;
+      case 'luxury_trap':
+        shouldUnlock = unlockedTechs.includes('emmer_cultivation');
+        break;
+      case 'hammurabi_law':
+        shouldUnlock = unlockedTechs.includes('imagined_orders') || resources.dunbarLimit >= 400;
+        break;
+      case 'universal_shekel':
+        shouldUnlock = unlockedTechs.includes('money_universal_trust');
+        break;
+      case 'ignoramus':
+        shouldUnlock = unlockedTechs.includes('scientific_method');
+        break;
+      case 'savannah_sprinter':
+        shouldUnlock = stats.comboStreak >= 5 || stats.maxCombo >= 5;
+        break;
+      case 'apex_agility':
+        shouldUnlock = (stats.jumpsCount + stats.slidesCount) >= 5;
+        break;
+    }
+
+    if (shouldUnlock) {
+      const unlockedAch: Achievement = {
+        ...ach,
+        unlocked: true,
+        unlockedAt: Date.now(),
+      };
+      newlyUnlocked.push(unlockedAch);
+      return unlockedAch;
+    }
+
+    return ach;
+  });
+
+  return { updatedAchievements, newlyUnlocked };
+}
+
+// Location-specific Environmental Dynamic Events
+export const DYNAMIC_WORLD_EVENTS: DynamicWorldEvent[] = [
+  // 1. River Meadow Events
+  {
+    id: 'event_meadow_rain',
+    type: 'seasonal_rainfall',
+    title: 'Spring Meadow Cloudburst & Rain Deluge',
+    landscape: 'river_meadow',
+    description: 'A sudden torrential spring rainstorm cascades over the wildflower valley, swelling the winding creek and causing rapid plant growth.',
+    harariHistoricalNote: 'Foragers followed micro-climates; seasonal spring cloudbursts triggered explosion of edible tuber shoots and sweet wild berry blooms within hours.',
+    duration: 24,
+    remainingTime: 24,
+    perkDescription: '🌧️ +100% Calorie yields from wild berries & lush creek vegetation',
+    perkMultiplier: { calories: 2.0, knowledge: 1.5 },
+    weatherStyle: 'rain',
+    active: false,
+  },
+  {
+    id: 'event_meadow_gazelles',
+    type: 'gazelle_migration',
+    title: 'Great Steppe Gazelle & Wild Equine Migration',
+    landscape: 'river_meadow',
+    description: 'Thundering hooves shake the grassy steppe as hundreds of migrating wild gazelles and horses sweep across the valley meadows.',
+    harariHistoricalNote: 'Sapiens organized coordinated ambushes at river crossings where migrating herds were forced to bottleneck.',
+    duration: 26,
+    remainingTime: 26,
+    perkDescription: '🦌 +40 Calories from herd tracking & +25 Knowledge',
+    perkMultiplier: { calories: 1.8, knowledge: 2.0 },
+    weatherStyle: 'clear_sun',
+    animalMigration: 'gazelles',
+    active: false,
+  },
+
+  // 2. Wetland Oasis Events
+  {
+    id: 'event_wetland_monsoon',
+    type: 'monsoon_deluge',
+    title: 'Monsoon Deluge & Sacred Lotus Bloom',
+    landscape: 'wetland_oasis',
+    description: 'Heavy atmospheric rain blankets the lagoon, releasing ethereal water mist as giant night-blooming lotus pads open simultaneously.',
+    harariHistoricalNote: 'Wetlands provided unprecedented year-round caloric security, enabling early semi-sedentary spiritual gathering sites.',
+    duration: 25,
+    remainingTime: 25,
+    perkDescription: '🪷 2x Amber Gem value & +35 Shared Myth power',
+    perkMultiplier: { amber: 2.0, myth: 2.0 },
+    weatherStyle: 'storm',
+    active: false,
+  },
+
+  // 3. Mountain Pass Events
+  {
+    id: 'event_mountain_mammoth',
+    type: 'mammoth_migration',
+    title: 'Great Woolly Mammoth Canyon Arch Migration',
+    landscape: 'mountain_pass',
+    description: 'A majestic family of giant woolly mammoths treks across the natural stone bridge arch and canyon passes, trumpeting across the gorge.',
+    harariHistoricalNote: 'Mammoth ivory was both the titanium and gold of the Upper Paleolithic—used for puncture-proof armor, spear points, and religious idols.',
+    duration: 28,
+    remainingTime: 28,
+    perkDescription: '🦣 +50 Mammoth Ivory material & +40 Ancient Ecological Knowledge',
+    perkMultiplier: { amber: 2.0, knowledge: 2.5 },
+    weatherStyle: 'clear_sun',
+    animalMigration: 'mammoths',
+    active: false,
+  },
+  {
+    id: 'event_mountain_squall',
+    type: 'mountain_squall',
+    title: 'Highland Squall & Radiant Sunburst',
+    landscape: 'mountain_pass',
+    description: 'Cold alpine gale winds whistle through the stone bridge canyon, clearing the fog into a blinding sunburst of crystal clarity.',
+    harariHistoricalNote: 'Highland winds forced hunters to master aerodynamic flint projectile shaping to hunt agile mountain game.',
+    duration: 22,
+    remainingTime: 22,
+    perkDescription: '🏔️ 2x Speed boost & double Migration score',
+    perkMultiplier: { amber: 2.0, calories: 1.5 },
+    weatherStyle: 'mist',
+    active: false,
+  },
+];
+
+export function getLandscapeEvents(landscape: SapiensLandscape): DynamicWorldEvent[] {
+  return DYNAMIC_WORLD_EVENTS.filter(e => e.landscape === landscape);
+}
+
+// BUMP & RESPAWN COLLISION LOGIC ("if they bump twice make sure they respawn")
+export interface BumpCollisionResult {
+  bumped: boolean;
+  newBumps: number;
+  shouldRespawn: boolean;
+  message: string;
+}
+
+export function handleBumpCollision(
+  currentBumps: number,
+  isInvulnerable: boolean
+): BumpCollisionResult {
+  if (isInvulnerable) {
+    return {
+      bumped: false,
+      newBumps: currentBumps,
+      shouldRespawn: false,
+      message: 'Invulnerable! Obstacle phased safely.',
+    };
+  }
+
+  const nextBumps = currentBumps + 1;
+  if (nextBumps >= 2) {
+    return {
+      bumped: true,
+      newBumps: 0, // Reset after respawn
+      shouldRespawn: true,
+      message: 'Second obstacle collision! Band leader down — respawning at safe checkpoint!',
+    };
+  }
+
+  return {
+    bumped: true,
+    newBumps: nextBumps,
+    shouldRespawn: false,
+    message: 'Collision impact! (1/2 bumps — one more collision forces a respawn!)',
+  };
+}
+
+export function applyEventResourcePerks(
+  event: DynamicWorldEvent | null,
+  baseGains: { calories: number; knowledge: number; amberMultiplier: number }
+): { calories: number; knowledge: number; amberMultiplier: number } {
+  if (!event || !event.active) {
+    return baseGains;
+  }
+
+  return {
+    calories: Math.round(baseGains.calories * (event.perkMultiplier.calories || 1.0)),
+    knowledge: Math.round(baseGains.knowledge * (event.perkMultiplier.knowledge || 1.0)),
+    amberMultiplier: baseGains.amberMultiplier * (event.perkMultiplier.amber || 1.0),
+  };
+}
+
+
+

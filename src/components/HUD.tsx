@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
-import { GameResources, HistoricalEra, Quest } from '../types/game';
+import { GameResources, HistoricalEra, Quest, RunStats, SapiensLandscape } from '../types/game';
 
 interface HUDProps {
   resources: GameResources;
   era: HistoricalEra;
   activeQuest: Quest | null;
+  runStats: RunStats;
+  currentLandscape: SapiensLandscape;
+  onSelectLandscape: (landscape: SapiensLandscape) => void;
   onOpenDilemmas: () => void;
   onOpenTechTree: () => void;
   onOpenCodex: () => void;
-  onOpenAIStudio: () => void;
+  onOpenAchievements: () => void;
+  unlockedAchievementsCount: number;
+  onTriggerJump: () => void;
+  onTriggerSlide: () => void;
+  onTriggerLaneLeft: () => void;
+  onTriggerLaneRight: () => void;
+  onToggleSprint: () => void;
+  isSprinting: boolean;
   onToggleMute: () => void;
   isMuted: boolean;
   onPause: () => void;
@@ -20,10 +30,20 @@ export const HUD: React.FC<HUDProps> = ({
   resources,
   era,
   activeQuest,
+  runStats,
+  currentLandscape,
+  onSelectLandscape,
   onOpenDilemmas,
   onOpenTechTree,
   onOpenCodex,
-  onOpenAIStudio,
+  onOpenAchievements,
+  unlockedAchievementsCount,
+  onTriggerJump,
+  onTriggerSlide,
+  onTriggerLaneLeft,
+  onTriggerLaneRight,
+  onToggleSprint,
+  isSprinting,
   onToggleMute,
   isMuted,
   onPause,
@@ -32,127 +52,144 @@ export const HUD: React.FC<HUDProps> = ({
 }) => {
   const [dockCollapsed, setDockCollapsed] = useState(false);
 
-  // Dunbar limit status
-  const isOverDunbar = resources.population > resources.dunbarLimit;
-  const dunbarFriction = isOverDunbar ? resources.population - resources.dunbarLimit : 0;
-
-  const eraLabels: Record<HistoricalEra, { name: string; color: string }> = {
-    cognitive: { name: 'Cognitive Revolution (70,000 BCE)', color: 'text-amber-400 border-amber-600' },
-    agricultural: { name: 'Agricultural Revolution (10,000 BCE)', color: 'text-emerald-400 border-emerald-600' },
-    scientific: { name: 'Scientific Revolution (1500 CE)', color: 'text-cyan-400 border-cyan-600' },
+  const landscapeLabels: Record<SapiensLandscape, { name: string; icon: string }> = {
+    river_meadow: {
+      name: 'Sunlit River Meadow',
+      icon: '🌾',
+    },
+    wetland_oasis: {
+      name: 'Water Lilies Wetland',
+      icon: '🪷',
+    },
+    mountain_pass: {
+      name: 'Mountain Canyon Arch',
+      icon: '🏔️',
+    },
   };
 
+  const eraLabels: Record<HistoricalEra, string> = {
+    cognitive: 'Cognitive Revolution (~70,000 BCE)',
+    agricultural: 'Agricultural Trap (~10,000 BCE)',
+    scientific: 'Scientific Revolution (~1500 CE)',
+  };
+
+  const comboMultiplier = Math.min(5, Math.max(1, Math.floor(runStats.comboStreak / 4) + 1));
+
   return (
-    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5 select-none font-sans">
-      {/* TOP BAR: World-matched perimeter clusters */}
-      <div className="flex justify-between items-start w-full">
-        {/* Top-Left Cluster: Primary Readouts (Tabular Numerals) */}
-        <div className="pointer-events-auto bg-stone-950/85 border border-stone-800 rounded-lg p-2.5 sm:p-3.5 shadow-lg max-w-sm space-y-2">
-          {/* Era Header */}
-          <div className="flex items-center justify-between gap-2 border-b border-stone-800 pb-1.5">
-            <span className={`text-[10px] sm:text-xs uppercase font-mono font-bold tracking-wider ${eraLabels[era].color}`}>
-              {eraLabels[era].name}
-            </span>
-            <span className="text-[10px] font-mono text-stone-400">
-              Season #{turnCount}
-            </span>
-          </div>
-
-          {/* Primary Population & Dunbar Limit */}
-          <div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] font-mono uppercase text-stone-400">Band Population</span>
-              <span className="text-xl sm:text-2xl font-serif font-black text-amber-200 tabular-nums">
-                {resources.population}
+    <div className="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-2.5 sm:p-4 select-none font-sans">
+      {/* TOP BAR: Natural Earth / Sapiens HUD */}
+      <div className="flex justify-between items-start w-full gap-2">
+        {/* Top-Left: Sapiens Band & Landscape Card */}
+        <div className="pointer-events-auto bg-stone-950/90 border border-amber-600/40 rounded-xl p-2 sm:p-2.5 shadow-2xl backdrop-blur-md flex items-center gap-3">
+          {/* Sapiens Chieftain Badge */}
+          <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden border-2 border-amber-500/80 shadow-[0_0_12px_rgba(245,158,11,0.3)] flex-shrink-0 bg-stone-900 flex items-center justify-center">
+            <span className="text-2xl">🏃</span>
+            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-stone-950 to-transparent py-0.5 text-center">
+              <span className="text-[8px] font-mono uppercase text-amber-200 font-bold tracking-tighter">
+                Sapiens
               </span>
             </div>
-            {/* Dunbar Threshold status indicator */}
-            <div className="flex items-center justify-between text-[10px] font-mono mt-0.5">
-              <span className="text-stone-400">Dunbar Limit:</span>
-              <span className={`font-semibold tabular-nums ${isOverDunbar ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {resources.dunbarLimit} max {isOverDunbar && `(Friction +${dunbarFriction})`}
-              </span>
-            </div>
-            {isOverDunbar && (
-              <p className="text-[9px] text-amber-300/80 font-mono italic mt-0.5">
-                Band exceeds 150 without enough shared myths. Factions may fracture!
-              </p>
-            )}
           </div>
 
-          {/* Secondary Metric Grid */}
-          <div className="grid grid-cols-2 gap-2 pt-1 border-t border-stone-800/80 text-[11px]">
-            {/* Myth Power / Shared Fiction */}
-            <div className="bg-stone-900/60 p-1.5 rounded border border-stone-800">
-              <div className="text-[9px] font-mono uppercase text-purple-300">Shared Fiction</div>
-              <div className="text-sm font-bold text-purple-200 tabular-nums flex items-center justify-between">
-                <span>{resources.mythPower}</span>
-                <span className="text-[9px] text-stone-400 font-normal">Belief</span>
-              </div>
+          {/* Landscape Selector & Band Info */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] sm:text-xs font-mono font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                <span>{landscapeLabels[currentLandscape].icon}</span>
+                <span>{landscapeLabels[currentLandscape].name}</span>
+              </span>
             </div>
 
-            {/* Caloric Sustenance */}
-            <div className="bg-stone-900/60 p-1.5 rounded border border-stone-800">
-              <div className="text-[9px] font-mono uppercase text-amber-400">Calories</div>
-              <div className="text-sm font-bold text-amber-200 tabular-nums flex items-center justify-between">
-                <span>{resources.calories}</span>
-                <span className={`text-[9px] ${resources.calories < 50 ? 'text-rose-400 font-bold' : 'text-stone-400 font-normal'}`}>
-                  {resources.calories < 50 ? 'Starving!' : 'Stores'}
-                </span>
-              </div>
+            {/* Landscape Quick Toggle Pills */}
+            <div className="flex items-center gap-1">
+              {(['river_meadow', 'wetland_oasis', 'mountain_pass'] as SapiensLandscape[]).map(l => (
+                <button
+                  key={l}
+                  onClick={() => onSelectLandscape(l)}
+                  className={`text-[9px] font-mono uppercase px-2 py-0.5 rounded transition cursor-pointer border ${
+                    currentLandscape === l
+                      ? 'bg-amber-500/30 text-amber-200 border-amber-400 font-bold shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                      : 'bg-stone-900/60 text-stone-400 border-stone-800 hover:text-stone-200'
+                  }`}
+                >
+                  {l === 'river_meadow' ? '🌾 Meadow' : l === 'wetland_oasis' ? '🪷 Oasis' : '🏔️ Mountain'}
+                </button>
+              ))}
             </div>
 
-            {/* Flint & Tools */}
-            <div className="bg-stone-900/60 p-1.5 rounded border border-stone-800">
-              <div className="text-[9px] font-mono uppercase text-stone-300">Flint & Ivory</div>
-              <div className="text-sm font-bold text-stone-200 tabular-nums">
-                {resources.flintAndStone}
-              </div>
-            </div>
-
-            {/* Knowledge & Discoveries */}
-            <div className="bg-stone-900/60 p-1.5 rounded border border-stone-800">
-              <div className="text-[9px] font-mono uppercase text-sky-300">Discoveries</div>
-              <div className="text-sm font-bold text-sky-200 tabular-nums">
-                {resources.knowledge}
-              </div>
+            {/* Band Size & Dunbar Limit */}
+            <div className="flex items-center gap-2 text-[10px] font-mono text-stone-300 pt-0.5">
+              <span>Band: <strong className="text-amber-300">{resources.population}</strong> / {resources.dunbarLimit} max</span>
+              <span>•</span>
+              <span>Season: <strong className="text-stone-200">#{turnCount}</strong></span>
             </div>
           </div>
         </div>
 
-        {/* Top-Right Cluster: Action Buttons & Utilities */}
-        <div className="pointer-events-auto flex items-center gap-1.5 sm:gap-2 bg-stone-950/85 border border-stone-800 rounded-lg p-1.5 sm:p-2 shadow-lg">
-          {/* AI Visualizer & Video Studio */}
-          <button
-            onClick={onOpenAIStudio}
-            className="px-2.5 py-1.5 bg-gradient-to-r from-amber-600/30 to-purple-600/30 hover:from-amber-600/50 hover:to-purple-600/50 border border-amber-500/50 text-amber-200 text-xs font-medium rounded flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            title="Generate AI Historical Images & Animate Videos"
-          >
-            <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
-            </svg>
-            <span className="hidden sm:inline">AI Studio</span>
-          </button>
+        {/* Top-Center: Shared Myth Combo Gauge & Beast Warning */}
+        <div className="pointer-events-auto flex flex-col items-center gap-1 max-w-sm w-full mx-auto">
+          {/* Sabertooth Predator Pursuit Alert */}
+          {runStats.beastAlert && (
+            <div className="w-full bg-rose-950/95 border-2 border-rose-500 rounded px-3 py-1 text-center shadow-xl animate-pulse">
+              <span className="text-xs sm:text-sm font-black font-mono text-rose-200 uppercase tracking-widest flex items-center justify-center gap-1.5">
+                <span>⚠️</span> SABERTOOTH CAT PURSUIT! JUMP / SLIDE TO SURVIVE!
+              </span>
+            </div>
+          )}
 
-          {/* Harari Codex Button */}
-          <button
-            onClick={onOpenCodex}
-            className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 text-xs font-medium rounded flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
-            title="Read Harari's Sapiens Codex [C]"
-          >
-            <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-            <span className="hidden sm:inline">Codex [C]</span>
-          </button>
+          {/* Shared Myth / Cooperation Combo Gauge */}
+          <div className="bg-stone-950/90 border border-amber-600/40 rounded-full px-3 py-1 flex items-center gap-2 shadow-xl backdrop-blur-md">
+            <span className="text-[10px] font-mono uppercase text-amber-400 font-bold tracking-wider">
+              Shared Myth
+            </span>
+            <div className="w-24 sm:w-36 h-2 bg-stone-900 rounded-full overflow-hidden border border-amber-900/60">
+              <div
+                className="h-full bg-gradient-to-r from-amber-600 via-yellow-400 to-amber-300 transition-all duration-150 shadow-[0_0_8px_#f59e0b]"
+                style={{ width: `${Math.min(100, (runStats.comboStreak % 4) * 25 || (runStats.comboStreak > 0 ? 100 : 0))}%` }}
+              />
+            </div>
+            <span className="text-xs font-black font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-700 tabular-nums">
+              x{comboMultiplier}
+            </span>
+          </div>
 
-          {/* Sound Mute Toggle */}
+          {/* Active Power-Up Banner */}
+          {runStats.activePowerUp && (
+            <div className="bg-amber-950/90 border border-amber-400 rounded-full px-3 py-0.5 text-[10px] font-mono text-amber-200 uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.5)]">
+              <span>
+                {runStats.activePowerUp === 'magnet' && '🔥 Prometheus Fire Torch Magnet'}
+                {runStats.activePowerUp === 'shield' && '🛡️ Lion-Man Ivory Amulet'}
+                {runStats.activePowerUp === 'surge' && '⚡ Cognitive Fire Surge'}
+              </span>
+              <span className="font-bold tabular-nums">
+                {runStats.powerUpTimeLeft > 0 ? `${runStats.powerUpTimeLeft.toFixed(1)}s` : 'Active'}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Top-Right: Amber Pickups, Distance, Sound & Pause */}
+        <div className="pointer-events-auto bg-stone-950/90 border border-amber-600/40 rounded-xl p-2 sm:p-2.5 shadow-2xl backdrop-blur-md flex items-center gap-2.5">
+          {/* Amber Gems / Pickups */}
+          <div className="flex items-center gap-1.5 bg-amber-950/60 border border-amber-500/50 px-2 py-1 rounded-lg">
+            <span className="text-base">🔸</span>
+            <span className="text-sm font-black font-mono text-amber-200 tabular-nums">
+              {runStats.pickupsCollected}
+            </span>
+          </div>
+
+          {/* Exploration Distance */}
+          <div className="hidden sm:flex flex-col items-end px-1 font-mono text-right">
+            <span className="text-[9px] text-stone-400 uppercase">Migration</span>
+            <span className="text-xs font-bold text-amber-200 tabular-nums">
+              {Math.floor(runStats.distanceTraveled)}m
+            </span>
+          </div>
+
+          {/* Sound Toggle */}
           <button
             onClick={onToggleMute}
-            className="p-1.5 sm:p-2 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded transition active:scale-95 cursor-pointer"
+            className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded-lg transition active:scale-95 cursor-pointer"
             title="Toggle Sound [M]"
           >
             {isMuted ? (
@@ -174,7 +211,7 @@ export const HUD: React.FC<HUDProps> = ({
           {/* Pause Button */}
           <button
             onClick={onPause}
-            className="p-1.5 sm:p-2 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded transition active:scale-95 cursor-pointer"
+            className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded-lg transition active:scale-95 cursor-pointer"
             title="Pause Game [Esc]"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -185,89 +222,147 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
-      {/* ACTIVE QUEST TICKER: Compact, world-matched banner */}
+      {/* ACTIVE HARARI QUEST BANNER */}
       {activeQuest && (
-        <div className="pointer-events-auto self-center max-w-lg w-full bg-stone-950/85 border border-amber-700/60 rounded-md p-2 shadow-md">
-          <div className="flex items-center justify-between text-[10px] font-mono text-amber-400/90 border-b border-stone-800 pb-1">
-            <span className="font-bold uppercase tracking-wider">Current Quest: {activeQuest.title}</span>
-            <span className="text-stone-400 font-normal">{activeQuest.harariChapter}</span>
+        <div className="pointer-events-auto self-center max-w-lg w-full bg-stone-950/85 border border-amber-700/50 rounded-lg p-2 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between text-[10px] font-mono text-amber-300 border-b border-stone-800 pb-1">
+            <span className="font-bold uppercase tracking-wider">
+              Quest: {activeQuest.title}
+            </span>
+            <span className="text-stone-400">{activeQuest.harariChapter}</span>
           </div>
           <p className="text-xs text-stone-200 mt-1 leading-snug">
             {activeQuest.description}
           </p>
-          <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 mt-1.5">
-            <span className="text-amber-200 font-medium">Objective: {activeQuest.objective}</span>
-            {activeQuest.completed && (
-              <span className="text-emerald-400 font-bold uppercase">Ready to Advance!</span>
-            )}
+          <div className="text-[10px] font-mono text-amber-400/90 mt-1 flex items-center justify-between">
+            <span>Objective: {activeQuest.objective}</span>
+            <span className="text-stone-400">{eraLabels[era]}</span>
           </div>
         </div>
       )}
 
-      {/* COLLAPSIBLE BOTTOM DOCK: Consolidated controls <= 15% footprint */}
-      <div className="pointer-events-auto self-center w-full max-w-3xl flex flex-col items-center">
-        {/* Collapse / Expand Tab */}
-        <button
-          onClick={() => setDockCollapsed(!dockCollapsed)}
-          className="text-[10px] font-mono bg-stone-950/90 text-stone-400 hover:text-stone-200 px-3 py-1 rounded-t-md border-t border-x border-stone-800 transition cursor-pointer"
-        >
-          {dockCollapsed ? '▲ Show Command Dock' : '▼ Collapse Dock'}
-        </button>
+      {/* BOTTOM RUNNER CONTROLS & DOCK */}
+      <div className="flex flex-col items-center gap-2.5 w-full">
+        {/* Temple Run Locomotion Controls */}
+        <div className="pointer-events-auto flex items-center justify-center gap-1.5 sm:gap-3 bg-stone-950/85 border border-amber-600/40 rounded-2xl px-3 py-2 shadow-2xl backdrop-blur-md">
+          {/* Shift Left */}
+          <button
+            onClick={onTriggerLaneLeft}
+            className="px-3 py-2 bg-stone-900 hover:bg-stone-800 active:bg-amber-600 active:scale-95 border border-stone-700 text-stone-200 text-xs font-bold rounded-xl flex items-center gap-1 transition cursor-pointer"
+            title="Shift Left Lane [A / Left Arrow]"
+          >
+            <span>⬅️</span>
+            <span className="hidden sm:inline">Left [A]</span>
+          </button>
 
-        {!dockCollapsed && (
-          <div className="w-full bg-stone-950/90 border border-stone-800 rounded-b-lg rounded-t-sm p-2 sm:p-3 shadow-2xl flex flex-wrap items-center justify-between gap-2">
-            {/* Left Nav Actions */}
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Tribal Council & Dilemmas */}
+          {/* Jump Over Logs */}
+          <button
+            onClick={onTriggerJump}
+            className="px-3.5 py-2 bg-amber-600/30 hover:bg-amber-600/50 active:bg-amber-500 active:scale-95 border border-amber-400 text-amber-100 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.3)]"
+            title="Leap Over Logs [Space / W / Up Arrow]"
+          >
+            <span>🪵</span>
+            <span>Jump [Space]</span>
+          </button>
+
+          {/* Slide Under Stone Arch */}
+          <button
+            onClick={onTriggerSlide}
+            className="px-3.5 py-2 bg-stone-800 hover:bg-amber-900/40 active:bg-amber-700 active:scale-95 border border-amber-600 text-amber-100 text-xs font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+            title="Slide Under Stone Arches [S / Down Arrow / C]"
+          >
+            <span>🏛️</span>
+            <span>Slide [S]</span>
+          </button>
+
+          {/* Shift Right */}
+          <button
+            onClick={onTriggerLaneRight}
+            className="px-3 py-2 bg-stone-900 hover:bg-stone-800 active:bg-amber-600 active:scale-95 border border-stone-700 text-stone-200 text-xs font-bold rounded-xl flex items-center gap-1 transition cursor-pointer"
+            title="Shift Right Lane [D / Right Arrow]"
+          >
+            <span className="hidden sm:inline">Right [D]</span>
+            <span>➡️</span>
+          </button>
+
+          {/* Sprint Boost */}
+          <button
+            onClick={onToggleSprint}
+            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+              isSprinting
+                ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-[0_0_15px_#f59e0b]'
+                : 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-amber-300'
+            }`}
+            title="Sprint Boost [Shift]"
+          >
+            <span>⚡</span>
+            <span className="hidden sm:inline">Sprint</span>
+          </button>
+
+          {/* Stamina Meter */}
+          <div className="hidden md:flex items-center gap-1.5 pl-1 text-[10px] font-mono text-amber-300">
+            <span>Stamina:</span>
+            <div className="w-16 h-2 bg-stone-900 rounded-full overflow-hidden border border-amber-900">
+              <div
+                className="h-full bg-amber-400 transition-all duration-100"
+                style={{ width: `${runStats.sprintEnergy}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Tactical Dock: Tribal Dilemma, Discoveries, Sapiens Codex & Advance Season */}
+        <div className="pointer-events-auto flex flex-col items-center">
+          <button
+            onClick={() => setDockCollapsed(prev => !prev)}
+            className="text-[10px] font-mono text-amber-400 hover:text-amber-200 bg-stone-950/80 px-2.5 py-0.5 rounded-t border border-b-0 border-amber-900/60 transition cursor-pointer"
+          >
+            {dockCollapsed ? '▲ Expand Sapiens Council' : '▼ Collapse Dock'}
+          </button>
+
+          {!dockCollapsed && (
+            <div className="bg-stone-950/90 border border-amber-900/60 rounded-xl p-1.5 sm:p-2 shadow-2xl flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
               <button
                 onClick={onOpenDilemmas}
-                className="px-3 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-amber-500 text-stone-100 text-xs font-semibold rounded flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                className="px-2.5 py-1.5 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-700/60 text-amber-200 text-xs font-medium rounded-lg flex items-center gap-1 transition cursor-pointer"
               >
-                <svg className="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-                <span>Tribal Dilemmas [D]</span>
+                <span>👥</span>
+                <span>Tribal Council [D]</span>
               </button>
 
-              {/* Technologies & Discoveries */}
               <button
                 onClick={onOpenTechTree}
-                className="px-3 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-sky-500 text-stone-100 text-xs font-semibold rounded flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-amber-700/60 text-amber-200 text-xs font-medium rounded-lg flex items-center gap-1 transition cursor-pointer"
               >
-                <svg className="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-                </svg>
+                <span>💡</span>
                 <span>Discoveries [T]</span>
               </button>
 
-              {/* Harari Codex */}
               <button
                 onClick={onOpenCodex}
-                className="px-3 py-2 bg-stone-900 hover:bg-stone-800 border border-stone-700 hover:border-purple-500 text-stone-100 text-xs font-semibold rounded flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+                className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 text-xs font-medium rounded-lg flex items-center gap-1 transition cursor-pointer"
               >
-                <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
-                <span>Codex [C]</span>
+                <span>📖</span>
+                <span>Codex [X]</span>
+              </button>
+
+              <button
+                onClick={onOpenAchievements}
+                className="px-2.5 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 text-xs font-medium rounded-lg flex items-center gap-1 transition cursor-pointer"
+              >
+                <span>🏆</span>
+                <span>Milestones ({unlockedAchievementsCount})</span>
+              </button>
+
+              <button
+                onClick={onEndTurn}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 active:scale-95 text-stone-950 text-xs font-black uppercase rounded-lg shadow-[0_0_12px_rgba(245,158,11,0.4)] transition cursor-pointer"
+              >
+                Next Season &gt;
               </button>
             </div>
-
-            {/* Right: End Season / Turn Button */}
-            <button
-              onClick={onEndTurn}
-              className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs uppercase tracking-wide rounded shadow transition active:scale-95 cursor-pointer flex items-center gap-2"
-            >
-              <span>Advance Season</span>
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
