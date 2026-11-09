@@ -79,6 +79,7 @@ export class World3D {
   private isSoftwareGl: boolean = false;
   private animFrameId: number = 0;
   private isTitleMode: boolean = true;
+  private isPaused = false;
   private currentLandscape: SapiensLandscape = 'river_meadow';
   private currentWeather: 'clear_sun' | 'rain' | 'storm' | 'mist' = 'clear_sun';
   private weatherActive: boolean = false;
@@ -954,7 +955,7 @@ export class World3D {
   }
 
   public shiftLane(direction: -1 | 1) {
-    if (this.isTitleMode) return;
+    if (this.isTitleMode || this.isPaused) return;
     const newLane = (this.currentLane + direction) as -1 | 0 | 1;
     if (newLane >= -1 && newLane <= 1) {
       this.currentLane = newLane;
@@ -966,7 +967,7 @@ export class World3D {
   }
 
   public triggerJump() {
-    if (this.isTitleMode || this.isJumping) return;
+    if (this.isTitleMode || this.isPaused || this.isJumping) return;
     this.isJumping = true;
     this.jumpTimer = 0;
     if (this.callbacks.onJump) {
@@ -975,7 +976,7 @@ export class World3D {
   }
 
   public triggerSlide() {
-    if (this.isTitleMode || this.isSliding) return;
+    if (this.isTitleMode || this.isPaused || this.isSliding) return;
     this.isSliding = true;
     this.slideTimer = 0;
     if (this.callbacks.onSlide) {
@@ -994,6 +995,8 @@ export class World3D {
       this.camera.lookAt(0, 2, -12);
       return;
     }
+
+    if (this.isPaused) return;
 
     // Direct Lane Inputs
     if (controls.laneLeft || controls.left) {
@@ -1320,15 +1323,11 @@ export class World3D {
 
   public setTitleMode(isTitle: boolean) {
     this.isTitleMode = isTitle;
-    if (!isTitle) {
-      this.distanceTraveled = 0;
-      this.playerZ = 0;
-      this.playerX = 0;
-      this.currentLane = 0;
-      this.playerTargetX = 0;
-      this.beastDistance = 10.5;
-      this.beastTargetDistance = 10.5;
-    }
+  }
+
+  public setPaused(paused: boolean) {
+    this.isPaused = paused;
+    if (paused) this.isTouching = false;
   }
 
   public setEra(_era: HistoricalEra) {}
@@ -1408,6 +1407,20 @@ export class World3D {
     cancelAnimationFrame(this.animFrameId);
     clearTimeout(this.animFrameId);
     window.removeEventListener('resize', this.onWindowResize);
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    this.scene.traverse(object => {
+      const mesh = object as THREE.Mesh;
+      if (mesh.geometry) geometries.add(mesh.geometry);
+      if (mesh.material) {
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+          materials.add(material);
+        }
+      }
+    });
+    geometries.forEach(geometry => geometry.dispose());
+    materials.forEach(material => material.dispose());
+    this.scene.environment?.dispose();
     this.renderer.dispose();
     if (this.renderer.domElement && this.renderer.domElement.parentNode) {
       this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);

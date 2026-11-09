@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { World3D, World3DControls } from './game/scene/world3d';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { World3D, World3DControls, World3DCallbacks } from './game/scene/world3d';
+import { createRunStats, createControls } from './game/session';
 import { soundEngine } from './game/audio';
 import {
   GameState,
@@ -41,6 +42,9 @@ export default function App() {
   const canvasMountRef = useRef<HTMLDivElement>(null);
   const worldRef = useRef<World3D | null>(null);
 
+  const callbacksRef = useRef<World3DCallbacks>({});
+  const [sessionId, setSessionId] = useState(0);
+
   // Game State
   const [gameState, setGameState] = useState<GameState>('title');
   const [era, setEra] = useState<HistoricalEra>('cognitive');
@@ -67,36 +71,10 @@ export default function App() {
   const [toastQueue, setToastQueue] = useState<Achievement[]>([]);
 
   // Temple Run Locomotion & Stats
-  const [runStats, setRunStats] = useState<RunStats>({
-    pickupsCollected: 0,
-    jumpsCount: 0,
-    slidesCount: 0,
-    distanceTraveled: 0,
-    comboStreak: 0,
-    maxCombo: 0,
-    sprintEnergy: 100,
-    score: 0,
-    currentLane: 0,
-    activePowerUp: null,
-    powerUpTimeLeft: 0,
-    beastAlert: false,
-    stumbles: 0,
-    landscape: 'river_meadow',
-    mythSurge: 0,
-  });
+  const [runStats, setRunStats] = useState<RunStats>(createRunStats);
   const [isSprinting, setIsSprinting] = useState(false);
-
-  // Controls tracker
-  const controlsRef = useRef<World3DControls>({
-    forward: false,
-    backward: false,
-    left: false,
-    right: false,
-    action: false,
-    sprint: false,
-    jump: false,
-    slide: false,
-  });
+  const controlsRef = useRef<World3DControls>(createControls());
+  const isModalOpen = !!activeDilemma || isTechTreeOpen || isCodexOpen || isAIStudioOpen || isAchievementsOpen;
 
   // Sync gameState to document.body.dataset.state for Ultra Mode verification
   useEffect(() => {
@@ -297,33 +275,23 @@ export default function App() {
     setRunStats(prev => ({ ...prev, beastAlert: isAlert }));
   }, []);
 
-  // 1. Initialize Three.js 3D World once
-  useEffect(() => {
+  // Initialize once per explicit new session.
+  useLayoutEffect(() => {
     if (!canvasMountRef.current) return;
 
-    const world = new World3D(canvasMountRef.current, {
-      onPickup: handlePickup,
-      onPowerUp: handlePowerUp,
-      onObstacleHit: handleObstacleHit,
-      onJump: handleJump,
-      onSlide: handleSlide,
-      onLaneChange: handleLaneChange,
-      onDistanceUpdate: handleDistanceUpdate,
-      onBeastAlert: handleBeastAlert,
-      onDilemmaGate: (_dilemmaId, choiceIndex) => {
-        soundEngine.playDrum();
-        const available = HISTORICAL_DILEMMAS.filter(d => d.era === era);
-        const dilemma = available[0] || HISTORICAL_DILEMMAS[0];
-        if (dilemma && dilemma.choices[choiceIndex]) {
-          handleSelectChoice(dilemma.choices[choiceIndex]);
-        }
+    // Keep the scene alive while React state changes; callbacks read the latest commit.
+    const callbacks = new Proxy({} as World3DCallbacks, {
+      get: (_target, key: keyof World3DCallbacks) => (...args: unknown[]) => {
+        const callback = callbacksRef.current[key] as ((...args: unknown[]) => void) | undefined;
+        callback?.(...args);
       },
     });
+    const world = new World3D(canvasMountRef.current, callbacks);
     worldRef.current = world;
 
     // Check autostart query param
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('autostart') === '1') {
+    if (sessionId === 0 && urlParams.get('autostart') === '1') {
       world.setTitleMode(false);
       setGameState('playing');
     }
@@ -350,7 +318,17 @@ export default function App() {
       world.dispose();
       worldRef.current = null;
     };
-  }, [handlePickup, handleJump, handleSlide, handlePowerUp, handleObstacleHit, handleLaneChange, handleDistanceUpdate, handleBeastAlert, era]);
+  }, [sessionId]);
+
+  useLayoutEffect(() => {
+    worldRef.current?.setTitleMode(gameState === 'title');
+    worldRef.current?.setPaused(gameState !== 'playing' || isModalOpen);
+    worldRef.current?.setLandscape(landscape);
+    if (gameState !== 'playing' || isModalOpen) {
+      controlsRef.current = createControls();
+      setIsSprinting(false);
+    }
+  }, [gameState, isModalOpen, landscape, sessionId]);
 
   // 2. Keyboard Listeners on Window
   useEffect(() => {
@@ -369,10 +347,14 @@ export default function App() {
       if (gameState === 'title') {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          startGame(era);
+          startGame(era, landscape);
           return;
         }
       }
+
+      if (isModalOpen) return;
+      if ([' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) e.preventDefault();
+      if (e.repeat) return;
 
       // Playing shortcuts
       if (gameState === 'playing') {
@@ -382,19 +364,15 @@ export default function App() {
         }
         if (key === 'a' || e.key === 'ArrowLeft') {
           worldRef.current?.shiftLane(-1);
-          controlsRef.current.left = true;
         }
         if (key === 'd' || e.key === 'ArrowRight') {
           worldRef.current?.shiftLane(1);
-          controlsRef.current.right = true;
         }
         if (key === 'w' || e.key === 'ArrowUp' || e.key === ' ') {
           worldRef.current?.triggerJump();
-          controlsRef.current.jump = true;
         }
         if (key === 's' || e.key === 'ArrowDown' || key === 'c') {
           worldRef.current?.triggerSlide();
-          controlsRef.current.slide = true;
         }
 
         if (key === 'escape' || key === 'p') {
@@ -443,12 +421,9 @@ export default function App() {
     };
 
     const handleBlur = () => {
-      // Clear all held inputs on blur so keys never stick
-      controlsRef.current.forward = false;
-      controlsRef.current.backward = false;
-      controlsRef.current.left = false;
-      controlsRef.current.right = false;
-      controlsRef.current.action = false;
+      controlsRef.current = createControls();
+      setIsSprinting(false);
+      setGameState(state => state === 'playing' ? 'paused' : state);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -460,17 +435,12 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [gameState, era]);
+  }, [gameState, era, landscape, isModalOpen]);
 
   // Start game from title
   const startGame = (startingEra: HistoricalEra, startingLandscape: SapiensLandscape = 'river_meadow') => {
     soundEngine.playDrum();
-    setEra(startingEra);
-    setLandscape(startingLandscape);
-    if (worldRef.current) {
-      worldRef.current.setTitleMode(false);
-      worldRef.current.setLandscape(startingLandscape);
-    }
+    resetSession(startingEra, startingLandscape);
     setGameState('playing');
   };
 
@@ -517,7 +487,7 @@ export default function App() {
         soundEngine.playDrum();
       }
     }
-  }, [turnCount, era, activeDilemma]);
+  }, [turnCount, era, activeDilemma, checkAchievements, unlockedTechIds, runStats]);
 
   // Select Dilemma Choice
   const handleSelectChoice = (choice: DilemmaChoice) => {
@@ -582,31 +552,52 @@ export default function App() {
     }
   }, [resources, unlockedTechIds, activeQuest]);
 
-  // Restart Game
-  const handleRestart = () => {
-    setResources(INITIAL_RESOURCES);
+  // A new run resets both React state and the procedural world.
+  const resetSession = (nextEra: HistoricalEra, nextLandscape: SapiensLandscape) => {
+    setResources({ ...INITIAL_RESOURCES });
+    setEra(nextEra);
+    setLandscape(nextLandscape);
     setTurnCount(1);
-    setQuests(INITIAL_QUESTS);
-    setTechs(DISCOVERY_TECHS);
+    setQuests(INITIAL_QUESTS.map(quest => ({ ...quest })));
+    setTechs(DISCOVERY_TECHS.map(tech => ({ ...tech })));
     setUnlockedTechIds(['tree_of_knowledge']);
+    setAchievements(INITIAL_ACHIEVEMENTS.map(achievement => ({ ...achievement })));
+    setRunStats(createRunStats(nextLandscape));
+    setToastQueue([]);
+    setActiveToast(null);
     setActiveDilemma(null);
     setIsTechTreeOpen(false);
     setIsCodexOpen(false);
     setIsAIStudioOpen(false);
-    if (worldRef.current) {
-      worldRef.current.setTitleMode(false);
-    }
+    setIsAchievementsOpen(false);
+    controlsRef.current = createControls();
+    setIsSprinting(false);
+    setSessionId(id => id + 1);
+  };
+
+  const handleRestart = () => {
+    resetSession('cognitive', landscape);
     setGameState('playing');
   };
 
   const handleReturnToTitle = () => {
-    setResources(INITIAL_RESOURCES);
-    setTurnCount(1);
-    if (worldRef.current) {
-      worldRef.current.setTitleMode(true);
-    }
+    resetSession('cognitive', landscape);
     setGameState('title');
   };
+
+  useLayoutEffect(() => {
+    callbacksRef.current = {
+      onPickup: handlePickup, onPowerUp: handlePowerUp,
+      onObstacleHit: handleObstacleHit, onJump: handleJump,
+      onSlide: handleSlide, onLaneChange: handleLaneChange,
+      onDistanceUpdate: handleDistanceUpdate, onBeastAlert: handleBeastAlert,
+      onDilemmaGate: (dilemmaId, choiceIndex) => {
+        const dilemma = HISTORICAL_DILEMMAS.find(d => d.id === dilemmaId && d.era === era)
+          ?? HISTORICAL_DILEMMAS.find(d => d.era === era);
+        if (dilemma) handleSelectChoice(dilemma.choices[choiceIndex]);
+      },
+    };
+  });
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-stone-950 text-stone-100 select-none">
