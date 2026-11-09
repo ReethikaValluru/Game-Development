@@ -15,6 +15,15 @@ class SoundEngine {
     const ctx=this.ctx;if(!ctx)return;
     const bus=ctx.createGain();bus.gain.value=.12;bus.connect(ctx.destination);this.musicBus=bus;
     let beat=0;
+    const noise=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*.15),ctx.sampleRate);
+    const samples=noise.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*(1-i/samples.length);
+    const percussion=(deep:boolean)=>{
+      const t=ctx.currentTime;
+      const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+      source.buffer=noise;filter.type=deep?'lowpass':'highpass';filter.frequency.value=deep?250:3500;
+      gain.gain.setValueAtTime(deep?.6:.12,t);gain.gain.exponentialRampToValueAtTime(.001,t+.14);
+      source.connect(filter);filter.connect(gain);gain.connect(bus);source.start();source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+    };
     const voice=(hz:number,duration:number,volume:number,type:OscillatorType='sine')=>{
       const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;
       o.type=type;o.frequency.value=hz;g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+duration);
@@ -23,9 +32,12 @@ class SoundEngine {
     const melody=era==="scientific"?[0,7,14,19,12,7,4,14,0,12,16,19,14,7,4,2]:era==="agricultural"?[0,4,7,12,7,4,9,7,5,9,12,16,12,9,7,4]:[0,7,12,14,7,4,2,7,0,4,7,16,14,12,7,2];
     const tick=()=>{
       if(ctx.state!=='running')return;
-      voice(220*Math.pow(2,melody[beat%16]/12),.42,.28,'triangle');
+      voice(220*Math.pow(2,melody[beat%16]/12),.55,.22,'sine');
       if(beat%2===0)voice(55*Math.pow(2,[0,0,5,7][Math.floor(beat/8)%4]/12),.55,.55);
-      voice(beat%4===0?65:130,.09,beat%4===0?.65:.22,'triangle');
+      percussion(beat%4===0);
+      if(beat%4===0)voice(65,.22,.6,'sine');
+      if(beat%16===0){voice(110,2,.16);voice(164.81,2,.1);voice(220,1.8,.08);}
+      if(beat%8===5){voice(880,.5,.08);voice(1320,.7,.035);}
       if(beat%8===0)voice(440,.95,.12);
       beat++;
     };tick();this.musicTimer=setInterval(tick,era==="scientific"?350:era==="agricultural"?280:312.5);

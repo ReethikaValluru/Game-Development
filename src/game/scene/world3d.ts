@@ -300,6 +300,21 @@ export class World3D {
     const halo = new THREE.Mesh(new THREE.RingGeometry(10, 10.3, 48), new THREE.MeshBasicMaterial({color:0xf7cdae, transparent:true, opacity:0.6, side:THREE.DoubleSide, fog:false}));
     halo.position.copy(moon.position); backdropGroup.add(halo);
 
+    // A camera-relative gradient sky keeps the horizon continuous throughout the run.
+    const skyColors=this.currentEra==='agricultural'?[0x243851,0xeeb77a]:this.currentEra==='scientific'?[0x080d2e,0x526595]:[0x101332,0x497a82];
+    const sky=new THREE.Mesh(new THREE.PlaneGeometry(620,420),new THREE.ShaderMaterial({
+      uniforms:{top:{value:new THREE.Color(skyColors[0])},bottom:{value:new THREE.Color(skyColors[1])}},
+      vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader:'uniform vec3 top;uniform vec3 bottom;varying vec2 vUv;void main(){gl_FragColor=vec4(mix(bottom,top,smoothstep(0.2,0.85,vUv.y)),1.0);}',
+      depthWrite:false,fog:false
+    }));sky.position.set(0,30,-240);sky.renderOrder=-10;backdropGroup.add(sky);
+    // Floating rock silhouettes and waterfalls create a fantastical horizon.
+    for(let i=0;i<5;i++){
+      const island=new THREE.Mesh(new THREE.ConeGeometry(5+i,16+i*2,6),new THREE.MeshStandardMaterial({color:0x3e526e,roughness:1}));
+      island.rotation.z=Math.PI;island.position.set((i-2)*33,30+(i%2)*15,-180);backdropGroup.add(island);
+      const fall=new THREE.Mesh(new THREE.PlaneGeometry(.7,25),new THREE.MeshBasicMaterial({color:0x81e5e7,transparent:true,opacity:.25}));
+      fall.position.copy(island.position);fall.position.y-=19;backdropGroup.add(fall);
+    }
     // Distant mountain ranges with misty canyon
     const mountainMat = new THREE.MeshStandardMaterial({
       color: 0x48606c,
@@ -363,6 +378,10 @@ export class World3D {
     trailMesh.receiveShadow = !this.isSoftwareGl;
     seg.add(trailMesh);
 
+    // Repeated paving stones emphasize forward speed without narrowing the lanes.
+    const paving = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2,.035,2.8),new THREE.MeshStandardMaterial({color:this.currentEra==='agricultural'?0xc4a474:0x8594a0,roughness:.95}),36);
+    const tile=new THREE.Object3D();
+    for(let i=0;i<36;i++){tile.position.set((i%3-1)*2.4,.02,-17+Math.floor(i/3)*3.1);tile.updateMatrix();paving.setMatrixAt(i,tile.matrix);}seg.add(paving);
     // Natural stone border curbs
     const curbMat = new THREE.MeshStandardMaterial({ color: 0x5a4d3f, roughness: 0.92 });
     for (const side of [-4.2, 4.2]) {
@@ -463,6 +482,17 @@ export class World3D {
     const motesGeo=new THREE.BufferGeometry();motesGeo.setAttribute('position',new THREE.BufferAttribute(motePositions,3));
     seg.add(new THREE.Points(motesGeo,new THREE.PointsMaterial({color:0xffdba1,size:.09,transparent:true,opacity:.85})));
 
+    // Tall carved pillars and cyan crystal clusters sit outside collision lanes.
+    for(const side of [-1,1]){
+      const pillar=new THREE.Mesh(new THREE.BoxGeometry(.65,3.8,.75),new THREE.MeshStandardMaterial({color:0x4a5970,roughness:.9}));
+      pillar.position.set(side*4.8,1.9,-17);seg.add(pillar);
+      const crown=new THREE.Mesh(new THREE.OctahedronGeometry(.35),new THREE.MeshStandardMaterial({color:0x7bf4e4,emissive:0x38c9d3,emissiveIntensity:1}));
+      crown.position.set(side*4.8,4.1,-17);seg.add(crown);
+      for(let i=0;i<3;i++){
+        const crystal=new THREE.Mesh(new THREE.ConeGeometry(.18,.8+i*.3,5),new THREE.MeshStandardMaterial({color:0x8f9dfb,emissive:0x6d54ca,emissiveIntensity:.55}));
+        crystal.position.set(side*(5.3+i*.35),.45,-4+i*.3);crystal.rotation.z=side*i*.15;seg.add(crystal);
+      }
+    }
     // 6. Populate Interactive Sapiens Runner Items (Pickups, Obstacles, Dilemma Gates)
     if (!isInitialBuffer) {
       this.populateSegmentItems(seg, zPos);
@@ -588,7 +618,8 @@ export class World3D {
     // Warm sun-kissed leafy foliage (Yellow-green & golden autumn tones - Image 2 & 3)
     const isGoldenAutumn = Math.random() > 0.5;
     const leafMat = new THREE.MeshStandardMaterial({
-      color: isGoldenAutumn ? 0xd697b4 : 0x65b5ae,
+      color: isGoldenAutumn ? 0x8c6fc5 : 0x329b9c,
+      emissive:isGoldenAutumn?0x5e246e:0x126975,emissiveIntensity:.3,
       roughness: 0.85,
     });
 
@@ -602,6 +633,11 @@ export class World3D {
       tree.add(foliage);
     }
 
+    const vineMaterial=new THREE.MeshStandardMaterial({color:0x71e9d9,emissive:0x2b929a,emissiveIntensity:.7});
+    for(let i=0;i<4;i++){
+      const vine=new THREE.Mesh(new THREE.CylinderGeometry(.018,.035,2.6+i*.3,4),vineMaterial);
+      vine.position.set((i-1.5)*.7,5.5,(i%2)*.6);tree.add(vine);
+    }
     return tree;
   }
 
@@ -909,7 +945,7 @@ export class World3D {
     player.add(hair);
 
     // Ochre cloak, bead talisman and dark hair create a readable storybook silhouette.
-    const cloak = new THREE.Mesh(new THREE.ConeGeometry(.47,.95,7,1,true),new THREE.MeshStandardMaterial({color:0xd78b56,side:THREE.DoubleSide,roughness:1}));
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(.47,.95,7,1,true),new THREE.MeshStandardMaterial({color:this.currentEra==='cognitive'?0x296f86:this.currentEra==='agricultural'?0xbd7846:0x5c5796,side:THREE.DoubleSide,roughness:1}));
     cloak.position.set(0,1.02,.18);cloak.scale.z=.65;player.add(cloak);
     const band = new THREE.Mesh(new THREE.TorusGeometry(.255,.04,5,12),new THREE.MeshStandardMaterial({color:0x74d7c2,emissive:0x286e67,emissiveIntensity:.4}));
     band.rotation.x=Math.PI/2;band.position.y=1.79;player.add(band);
@@ -917,6 +953,14 @@ export class World3D {
     talisman.position.set(0,1.35,.39);player.add(talisman);
     const leftArm=new THREE.Mesh(new THREE.CylinderGeometry(.08,.07,.6,6),skinMat);
     leftArm.position.set(-.38,1.2,0);leftArm.rotation.z=-.25;player.add(leftArm);
+    // Original human explorer: luminous woven trim, shoulder brooches and a trail satchel.
+    const trim=new THREE.MeshStandardMaterial({color:0x9ef1e1,emissive:0x36a9ad,emissiveIntensity:.65});
+    for(const side of [-1,1]){
+      const brooch=new THREE.Mesh(new THREE.OctahedronGeometry(.1),trim);brooch.position.set(side*.32,1.45,.2);player.add(brooch);
+      const boot=new THREE.Mesh(new THREE.BoxGeometry(.21,.17,.33),furMat);boot.position.set(side*.16,.12,-.06);player.add(boot);
+    }
+    const belt=new THREE.Mesh(new THREE.TorusGeometry(.34,.035,5,12),trim);belt.rotation.x=Math.PI/2;belt.position.y=.88;player.add(belt);
+    const satchel=new THREE.Mesh(new THREE.BoxGeometry(.27,.32,.16),new THREE.MeshStandardMaterial({color:0x79513e}));satchel.position.set(-.36,.85,.18);player.add(satchel);
     // Legs
     const legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.7, 6);
     this.leftLegMesh = new THREE.Mesh(legGeo, skinMat);
