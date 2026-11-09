@@ -1,0 +1,9 @@
+{
+  "name": "SapiensForest",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {"Sapiens": {"$path": "src/Shared"}},
+    "ServerScriptService": {"SapiensServer": {"$path": "src/Server"}},
+    "StarterPlayer": {"StarterPlayerScripts": {"SapiensClient": {"$path": "src/Client/Main.client.lua"}}}
+  }
+}
