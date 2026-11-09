@@ -38,6 +38,7 @@ local function character(player,model)
     local root=model:WaitForChild("HumanoidRootPart",10)
     local humanoid=model:WaitForChild("Humanoid",10)
     local s=sessions[player];if not s or not root or not humanoid then return end
+    local fill=Instance.new("PointLight");fill.Name="ExplorerFill";fill.Color=Color3.fromRGB(180,219,215);fill.Brightness=.65;fill.Range=22;fill.Shadows=false;fill.Parent=root
     root.Anchored=true;humanoid.AutoRotate=false;humanoid.WalkSpeed=0;humanoid.JumpPower=0
     for _,p in ipairs(model:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
     model.PrimaryPart=root

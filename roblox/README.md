@@ -2,11 +2,15 @@
 
 A separate Roblox port of the browser game's Cognitive chapter, not an HTML wrapper. **This is an engine-untested starter, not a Roblox-published release.** The web preview and its three chapters remain unchanged.
 
+## Visibility fix
+
+This version replaces the overly dark midnight lighting with bright misty morning lighting, reduced haze, brighter green foliage, blue-grey hazards and pale paving. Shadows are disabled for consistent readability; the explorer also has a soft fill light. An editor preview and starting camera are embedded, so the imported place is no longer empty before Play. Existing downloaded files do not update automatically: download the updated `.rbxlx` again and open it as a place, not as a model inside another place.
+
 ## Open and play (no plugins required)
 
 1. Download this repository's `codex/gameplay-foundation` branch as ZIP and extract it, or download `roblox/SapiensForest.rbxlx` directly.
 2. Install Roblox Studio from https://create.roblox.com/ and sign in.
-3. In Studio, open `SapiensForest.rbxlx` using **File → Open from File**. Allow the local file's scripts to run if Studio asks. The world is built by the scripts when Play starts; a blank editing viewport before Play is expected.
+3. In Studio, open `SapiensForest.rbxlx` using **File → Open from File**. Allow the local file's scripts to run if Studio asks. A lit forest preview is visible immediately in the editor. Press Play to replace that preview with the full playable trail.
 4. Press **Play (F5)**, then **Enter the forest**. Use Play, not Run, so a player and HUD spawn.
 5. A/D or Left/Right = lanes. Space/W = jump. S/Down = slide. Touch buttons and gamepad D-pad, A and B are included. Jump logs, slide under arches, dodge standing stones.
 6. Gather eight supplies, answer the story choice, and reach the 900m arch. The second distinct obstacle hit kills the character and automatically restarts at 0m after about two seconds. Repeated contact with the same object counts once. Supplies and the insight survive death; each supply can be collected once per chapter attempt.
