@@ -54,6 +54,7 @@ export interface Campaign {
   decisionIds: string[];
   questIds: string[];
   achievementIds: string[];
+  insightIds: string[];
   stats: RunStats;
   elapsed: number;
   season: number;
@@ -73,6 +74,7 @@ export function newCampaign(
     decisionIds: [],
     questIds: [],
     achievementIds: [],
+    insightIds: [],
     stats: createRunStats(landscape),
     elapsed: 0,
     season: 1,
@@ -82,6 +84,8 @@ export function newCampaign(
   };
 }
 export type Action =
+  | { type: "insight"; id: string }
+  | { type: "respawn" }
   | { type: "restore"; value: Campaign }
   | { type: "tick"; dt: number; snapshot: Partial<RunStats>; distance: number }
   | { type: "pickup"; kind: "flint" | "berries" | "ivory" | "amber" }
@@ -165,6 +169,12 @@ export function campaignReducer(s: Campaign, action: Action): Campaign {
   if (s.status !== "playing") return s;
   let n = s;
   switch (action.type) {
+    case "respawn":
+      return {...s, stats:{...s.stats,distanceTraveled:0,score:s.stats.pickupsCollected*100,bumpCount:0,comboStreak:0,activePowerUp:null,powerUpTimeLeft:0,currentLane:0}};
+    case "insight":
+      if(action.id!==s.era || s.insightIds.includes(action.id))return s;
+      n={...s,insightIds:[...s.insightIds,action.id],resources:{...s.resources,knowledge:s.resources.knowledge+12}};
+      break;
     case "tick": {
       const dt = Math.max(
         0,

@@ -222,7 +222,7 @@ export class World3D {
 
     // 3. Scene & Natural Atmosphere (Warm Sunlit Earth, NOT all blue!)
     this.scene = new THREE.Scene();
-    const skyColor = 0xa3c8b4; // Sunlit misty forest horizon
+    const skyColor = 0x555574; // Sunlit misty forest horizon
     this.scene.background = new THREE.Color(skyColor);
     this.scene.fog = new THREE.FogExp2(skyColor, 0.014);
 
@@ -287,6 +287,13 @@ export class World3D {
 
   private createDistantMountainArch() {
     const backdropGroup = new THREE.Group();
+    this.camera.add(backdropGroup);
+    this.scene.add(this.camera);
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 16), new THREE.MeshBasicMaterial({color: 0xffe5c2, fog: false}));
+    moon.position.set(35, 36, -180);
+    backdropGroup.add(moon);
+    const halo = new THREE.Mesh(new THREE.RingGeometry(10, 10.3, 48), new THREE.MeshBasicMaterial({color:0xf7cdae, transparent:true, opacity:0.6, side:THREE.DoubleSide, fog:false}));
+    halo.position.copy(moon.position); backdropGroup.add(halo);
 
     // Distant mountain ranges with misty canyon
     const mountainMat = new THREE.MeshStandardMaterial({
@@ -312,7 +319,7 @@ export class World3D {
     archBeam.position.set(0, 16, -135);
     backdropGroup.add(archBeam);
 
-    this.scene.add(backdropGroup);
+
   }
 
   // --- 2. PROCEDURAL 3-LANE RUNNER TRACK (Lush Earth, Wildflowers & Water Lilies) ---
@@ -336,7 +343,7 @@ export class World3D {
     const trailGeo = new THREE.PlaneGeometry(8.2, World3D.SEGMENT_LENGTH);
     trailGeo.rotateX(-Math.PI / 2);
 
-    let trailColor = 0xb09c7a; // Sunlit sandstone & meadow dirt
+    let trailColor = 0xb08a83; // Sunlit sandstone & meadow dirt
     if (this.currentLandscape === 'wetland_oasis') trailColor = 0x8a927d; // Mossy riverside flagstone
     if (this.currentLandscape === 'mountain_pass') trailColor = 0x8f8476; // Mountain stone trail
 
@@ -364,7 +371,7 @@ export class World3D {
     const meadowGeo = new THREE.PlaneGeometry(45, World3D.SEGMENT_LENGTH);
     meadowGeo.rotateX(-Math.PI / 2);
     const meadowMat = new THREE.MeshStandardMaterial({
-      color: this.currentLandscape === 'mountain_pass' ? 0x696d57 : this.currentLandscape === 'wetland_oasis' ? 0x375f50 : 0x4a7c2c,
+      color: this.currentLandscape === 'mountain_pass' ? 0x696d57 : this.currentLandscape === 'wetland_oasis' ? 0x375f50 : 0x416765,
       roughness: 0.9,
     });
 
@@ -424,6 +431,27 @@ export class World3D {
       rightTree.position.set(13.5 + Math.random() * 4, 0, t);
       seg.add(rightTree);
     }
+
+    // Sculpted banks, luminous fungi and ochre trail inlays frame the playable lanes.
+    const glow = new THREE.MeshStandardMaterial({color:0x9ff5d2, emissive:0x52d9bd, emissiveIntensity:0.8, roughness:0.5});
+    const earth = new THREE.MeshStandardMaterial({color:0x75556e, roughness:1});
+    for (const side of [-1, 1]) {
+      for (let i=0;i<4;i++) {
+        const z = -15+i*9;
+        const mound = new THREE.Mesh(new THREE.IcosahedronGeometry(2.2,1), earth);
+        mound.scale.set(1.5,0.45,1.8); mound.position.set(side*6.8,-0.2,z); seg.add(mound);
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(.06,.1,.65,5), earth);
+        stem.position.set(side*5.2,.3,z); seg.add(stem);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(.45,8,5,0,Math.PI*2,0,Math.PI/2),glow);
+        cap.position.set(side*5.2,.6,z); seg.add(cap);
+        const marker = new THREE.Mesh(new THREE.OctahedronGeometry(.07), glow);
+        marker.position.set(side*3.85,.12,z); seg.add(marker);
+      }
+    }
+    const motePositions = new Float32Array(72);
+    for(let i=0;i<24;i++){motePositions[i*3]=(i%2?1:-1)*(4.5+Math.random()*9);motePositions[i*3+1]=1+Math.random()*7;motePositions[i*3+2]=Math.random()*38-19;}
+    const motesGeo=new THREE.BufferGeometry();motesGeo.setAttribute('position',new THREE.BufferAttribute(motePositions,3));
+    seg.add(new THREE.Points(motesGeo,new THREE.PointsMaterial({color:0xffdba1,size:.09,transparent:true,opacity:.85})));
 
     // 6. Populate Interactive Sapiens Runner Items (Pickups, Obstacles, Dilemma Gates)
     if (!isInitialBuffer) {
@@ -499,7 +527,7 @@ export class World3D {
   // Majestic Sunlit Canopy Tree (Inspired by Images 2 and 3)
   private createSunlitCanopyTree(): THREE.Group {
     const tree = new THREE.Group();
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x4a3424, roughness: 0.95 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x61435b, roughness: 0.95 });
 
     // Trunk with natural slight curve (like Image 2)
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 6.5, 7), woodMat);
@@ -507,10 +535,16 @@ export class World3D {
     trunk.rotation.z = (Math.random() - 0.5) * 0.18;
     tree.add(trunk);
 
+    for (const side of [-1,1]) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(.12,.3,3,6),woodMat);
+      branch.position.set(side*.8,5,0); branch.rotation.z=side*-.65; tree.add(branch);
+      const lantern = new THREE.Mesh(new THREE.OctahedronGeometry(.2),new THREE.MeshStandardMaterial({color:0xffd799,emissive:0xffbb66,emissiveIntensity:1}));
+      lantern.position.set(side*1.8,4.6,0);tree.add(lantern);
+    }
     // Warm sun-kissed leafy foliage (Yellow-green & golden autumn tones - Image 2 & 3)
     const isGoldenAutumn = Math.random() > 0.5;
     const leafMat = new THREE.MeshStandardMaterial({
-      color: isGoldenAutumn ? 0xc49d28 : 0x558f32,
+      color: isGoldenAutumn ? 0xd697b4 : 0x65b5ae,
       roughness: 0.85,
     });
 
@@ -668,6 +702,9 @@ export class World3D {
       group.add(rock);
     }
 
+    // A glowing spiral marks hazards as imagined ancient story stones.
+    const rune = new THREE.Mesh(new THREE.TorusGeometry(.22,.025,4,16,Math.PI*1.7),new THREE.MeshStandardMaterial({color:0xffc782,emissive:0xff9944,emissiveIntensity:.8}));
+    rune.position.set(0,type==='slide'?1.68:type==='jump'?.35:1.3,.95);group.add(rune);
     return group;
   }
 
@@ -804,7 +841,7 @@ export class World3D {
   private createSapiensChieftainCharacter(): THREE.Group {
     const player = new THREE.Group();
     const skinMat = new THREE.MeshStandardMaterial({ color: 0x9c6c4c, roughness: 0.7 });
-    const furMat = new THREE.MeshStandardMaterial({ color: 0x402b1c, roughness: 0.95 });
+    const furMat = new THREE.MeshStandardMaterial({ color: 0xa85252, roughness: 0.95 });
     const spearMat = new THREE.MeshStandardMaterial({ color: 0x5a432e, roughness: 0.8 });
     const flintMat = new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.3, metalness: 0.1 });
 
@@ -819,7 +856,7 @@ export class World3D {
     player.add(mantle);
 
     // Head with Hair
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), skinMat);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), skinMat);
     head.position.y = 1.75;
     player.add(head);
 
@@ -827,6 +864,15 @@ export class World3D {
     hair.position.set(0, 1.82, -0.05);
     player.add(hair);
 
+    // Ochre cloak, bead talisman and dark hair create a readable storybook silhouette.
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(.47,.95,7,1,true),new THREE.MeshStandardMaterial({color:0xd78b56,side:THREE.DoubleSide,roughness:1}));
+    cloak.position.set(0,1.02,.18);cloak.scale.z=.65;player.add(cloak);
+    const band = new THREE.Mesh(new THREE.TorusGeometry(.255,.04,5,12),new THREE.MeshStandardMaterial({color:0x74d7c2,emissive:0x286e67,emissiveIntensity:.4}));
+    band.rotation.x=Math.PI/2;band.position.y=1.79;player.add(band);
+    const talisman = new THREE.Mesh(new THREE.OctahedronGeometry(.13),new THREE.MeshStandardMaterial({color:0xffe0a0,emissive:0xffb65b,emissiveIntensity:.6}));
+    talisman.position.set(0,1.35,.39);player.add(talisman);
+    const leftArm=new THREE.Mesh(new THREE.CylinderGeometry(.08,.07,.6,6),skinMat);
+    leftArm.position.set(-.38,1.2,0);leftArm.rotation.z=-.25;player.add(leftArm);
     // Legs
     const legGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.7, 6);
     this.leftLegMesh = new THREE.Mesh(legGeo, skinMat);
@@ -1275,31 +1321,22 @@ export class World3D {
   }
 
   private handleObstacleHit() {
-    if (this.tutorialMode || this.respawnInvulnerableTimer > 0) return;
-    if (this.activePowerUp === 'shield' || this.activePowerUp === 'surge') {
-      this.activePowerUp = null;
-      this.powerUpTimeLeft = 0;
-      if (this.shieldMesh) (this.shieldMesh.material as THREE.MeshBasicMaterial).opacity = 0;
-      if (this.callbacks.onObstacleHit) {
-        this.callbacks.onObstacleHit(true);
-      }
-      return;
+    if (this.tutorialMode || this.isPaused) return;
+    const shielded = this.activePowerUp === 'shield' || this.activePowerUp === 'surge';
+    if (shielded) {
+      this.activePowerUp=null; this.powerUpTimeLeft=0;
+      if(this.shieldMesh) (this.shieldMesh.material as THREE.MeshBasicMaterial).opacity=0;
     }
-
     this.bumpCount += 1;
-    if (this.bumpCount >= 2) {
-      this.bumpCount = 0;
-      this.respawnInvulnerableTimer = 2;
-      this.currentLane = 0;
-      this.playerTargetX = 0;
+    this.callbacks.onObstacleHit?.(shielded);
+    this.cameraShakeTimer=.3;
+    if(this.bumpCount>=2){
+      this.isPaused=true;
+      this.playerGroup.rotation.z=Math.PI/2;
       this.callbacks.onRespawn?.();
-    }
-    this.beastAlertTimer = 5.0;
-    if (this.callbacks.onBeastAlert) {
-      this.callbacks.onBeastAlert(true);
-    }
-    if (this.callbacks.onObstacleHit) {
-      this.callbacks.onObstacleHit(false);
+    } else {
+      this.beastAlertTimer=5;
+      this.callbacks.onBeastAlert?.(true);
     }
   }
 
@@ -1366,27 +1403,27 @@ export class World3D {
 
   public setLandscape(landscape: SapiensLandscape) {
     this.currentLandscape = landscape;
-    let skyHex = 0xa3c8b4;
+    let skyHex = 0x555574;
     let sunHex = 0xfffae0;
     let sunInt = 1.85;
     let hemiSky = 0xddeeff;
     let hemiGround = 0x5a7d36;
 
     if (landscape === 'wetland_oasis') {
-      skyHex = 0x82b2a6; // Monet water lily pond teal-green mist (Image 1)
+      skyHex = 0x426b79; // Monet water lily pond teal-green mist (Image 1)
       sunHex = 0xfcf3d4;
       sunInt = 1.75;
       hemiSky = 0xcde8e4;
       hemiGround = 0x3d6e55;
     } else if (landscape === 'mountain_pass') {
-      skyHex = 0x94abbb; // Sunlit mountain canyon haze (Image 2)
+      skyHex = 0x716582; // Sunlit mountain canyon haze (Image 2)
       sunHex = 0xfff0d8;
       sunInt = 2.0;
       hemiSky = 0xd2e3f4;
       hemiGround = 0x64614a;
     } else {
       // river_meadow
-      skyHex = 0xa3c8b4; // Sun-drenched wildflower meadow (Image 3)
+      skyHex = 0x555574; // Sun-drenched wildflower meadow (Image 3)
       sunHex = 0xfffae0;
       sunInt = 1.85;
       hemiSky = 0xddeeff;

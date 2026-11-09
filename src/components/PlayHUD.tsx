@@ -37,6 +37,7 @@ export function PlayHUD({
           </button>
         </div>
       </header>
+      <div className="impact-meter" role="status">{s.stats.bumpCount ? '◆ ◇  One impact — next hit returns you to the start' : '◆ ◆  Two impacts before respawn'}</div>
       <div className="resource-strip">
         {[
           ["Food", Math.floor(s.resources.calories)],

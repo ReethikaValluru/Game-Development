@@ -84,6 +84,7 @@ export function parseSave(raw: string): Checkpoint | null {
       )
     )
       return null;
+    if(s.insightIds !== undefined && !ids(s.insightIds, ERAS)) return null;
     // Copy known fields only. World-only state always resets at a fresh trail segment.
     const resources = Object.fromEntries(
       Object.keys(base.resources).map((k) => [k, s.resources[k]]),
@@ -111,6 +112,7 @@ export function parseSave(raw: string): Checkpoint | null {
         decisionIds: s.decisionIds,
         questIds: s.questIds,
         achievementIds: s.achievementIds,
+        insightIds: s.insightIds ?? [],
         elapsed: s.elapsed,
         season: s.season,
         seasonTime: s.seasonTime,

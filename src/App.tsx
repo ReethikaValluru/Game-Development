@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import type { World3D, World3DControls } from "./game/scene/world3d";
+import { StoryQuest } from "./components/StoryQuest";
 import { soundEngine } from "./game/audio";
 import { createControls } from "./game/session";
 import {
@@ -78,6 +79,7 @@ export default function App() {
   }, [s]);
   const [screen, setScreen] = useState<"title" | "playing">("title");
   const [menu, setMenu] = useState<string | null>(null);
+  const [dead, setDead] = useState(false);
   const [intro, setIntro] = useState(false);
   const [epoch, setEpoch] = useState(0);
   const [checkpoint, setCheckpoint] = useState<Checkpoint | null>(null);
@@ -92,7 +94,7 @@ export default function App() {
   const controls = useRef<World3DControls>(createControls());
   const distanceOffset = useRef(0);
   const paused =
-    screen !== "playing" || !!menu || intro || s.status !== "playing";
+    screen !== "playing" || dead || !!menu || intro || s.status !== "playing";
   const pausedRef = useRef(paused);
   useLayoutEffect(() => {
     pausedRef.current = paused;
@@ -187,7 +189,9 @@ export default function App() {
             dispatch({ type: "slide" });
             soundEngine.playSlideSound();
           },
-          onLaneChange: () => dispatch({ type: "lane" }),
+          onLaneChange: () => {dispatch({ type: "lane" }); soundEngine.playLaneShift();},
+          onPowerUp: () => soundEngine.playPowerup(),
+          onRespawn: () => {pausedRef.current=true; setMenu(null); setDead(true);soundEngine.playBeastRoar();},
           onObstacleHit: (shielded) => {
             dispatch({ type: "hit", shielded });
             soundEngine.playStumble();
@@ -261,6 +265,18 @@ export default function App() {
       world.current = null;
     };
   }, [epoch, screen]);
+  useEffect(() => {
+    soundEngine.setMusic(!paused && !settings.muted);
+    return () => soundEngine.stopMusic();
+  }, [paused, settings.muted]);
+  useEffect(() => {
+    if(!dead)return;
+    const timer=setTimeout(()=>{
+      distanceOffset.current=0;controls.current=createControls();
+      dispatch({type:"respawn"});setEpoch(v=>v+1);setDead(false);soundEngine.playRespawn();
+    },1800);
+    return ()=>clearTimeout(timer);
+  },[dead]);
   useLayoutEffect(() => {
     world.current?.setPaused(paused);
     if (paused) {
@@ -634,8 +650,10 @@ export default function App() {
           </div>
         </Dialog>
       )}
+      {dead && <div className="death-overlay" role="alert"><span className="eyebrow">Two impacts</span><h2>Your journey falters</h2><p>Returning to the starting point…</p><small>Your discoveries and chapter progress stay with you.</small></div>}
       {menu === "journal" && (
         <Dialog title="Journey journal" onClose={closeMenu}>
+          <StoryQuest key={s.era} s={s} onDiscover={()=>{dispatch({type:"insight",id:s.era});soundEngine.playDiscovery();}} onGo={setMenu}/>
           <h3>Chapter progress</h3>
           {objectives(s).map((o) => (
             <p key={o.label}>

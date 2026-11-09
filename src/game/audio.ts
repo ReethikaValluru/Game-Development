@@ -6,6 +6,34 @@ class SoundEngine {
   private isMuted: boolean = false;
   private campfireNoiseNode: AudioNode | null = null;
 
+  private musicTimer: ReturnType<typeof setInterval> | null = null;
+  private musicBus: GainNode | null = null;
+  public setMusic(playing: boolean) {
+    this.stopMusic();
+    if (!playing || this.isMuted) return;
+    this.initContext();
+    const ctx=this.ctx;if(!ctx)return;
+    const bus=ctx.createGain();bus.gain.value=.12;bus.connect(ctx.destination);this.musicBus=bus;
+    let beat=0;
+    const voice=(hz:number,duration:number,volume:number,type:OscillatorType='sine')=>{
+      const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;
+      o.type=type;o.frequency.value=hz;g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+duration);
+      o.connect(g);g.connect(bus);o.start(t);o.stop(t+duration+.02);o.onended=()=>{o.disconnect();g.disconnect();};
+    };
+    const melody=[0,7,12,14,7,4,2,7,0,4,7,16,14,12,7,2];
+    const tick=()=>{
+      if(ctx.state!=='running')return;
+      voice(220*Math.pow(2,melody[beat%16]/12),.42,.28,'triangle');
+      if(beat%2===0)voice(55*Math.pow(2,[0,0,5,7][Math.floor(beat/8)%4]/12),.55,.55);
+      voice(beat%4===0?65:130,.09,beat%4===0?.65:.22,'triangle');
+      if(beat%8===0)voice(440,.95,.12);
+      beat++;
+    };tick();this.musicTimer=setInterval(tick,312.5);
+  }
+  public stopMusic() {
+    if(this.musicTimer)clearInterval(this.musicTimer);this.musicTimer=null;
+    this.musicBus?.disconnect();this.musicBus=null;
+  }
   constructor() {
     // AudioContext will be initialized on first user gesture
   }
@@ -24,6 +52,7 @@ class SoundEngine {
 
   public toggleMute(): boolean {
     this.isMuted = !this.isMuted;
+    if(this.isMuted)this.stopMusic();
     if (this.isMuted && this.campfireNoiseNode) {
       try {
         (this.campfireNoiseNode as AudioBufferSourceNode).stop();

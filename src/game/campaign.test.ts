@@ -126,3 +126,20 @@ test("storage failures are surfaced without crashing gameplay", () => {
   assert.ok(loadCheckpoint(storage).error);
   assert.ok(saveCheckpoint(storage, newCampaign()));
 });
+
+test('respawn resets trail position and combo while preserving chapter discoveries',()=>{
+ const s=newCampaign();s.stats.distanceTraveled=400;s.stats.bumpCount=2;s.stats.comboStreak=5;s.elapsed=80;s.techIds.push('shared_fiction');
+ const next=reduce(s,{type:'respawn'});
+ assert.equal(next.stats.distanceTraveled,0);assert.equal(next.stats.bumpCount,0);assert.equal(next.stats.comboStreak,0);
+ assert.equal(next.elapsed,80);assert.deepEqual(next.techIds,s.techIds);
+});
+test('insight rewards are unique, era-bound and persisted with old-save compatibility',()=>{
+ const s=newCampaign();const next=reduce(s,{type:'insight',id:'cognitive'});
+ assert.equal(next.resources.knowledge,s.resources.knowledge+12);
+ assert.equal(reduce(next,{type:'insight',id:'cognitive'}),next);
+ assert.equal(reduce(next,{type:'insight',id:'scientific'}),next);
+ const envelope={version:1,savedAt:new Date().toISOString(),campaign:next};
+ assert.deepEqual(parseSave(JSON.stringify(envelope))?.campaign.insightIds,['cognitive']);
+ delete (envelope.campaign as Partial<typeof next>).insightIds;
+ assert.deepEqual(parseSave(JSON.stringify(envelope))?.campaign.insightIds,[]);
+});
