@@ -14,34 +14,46 @@ class SoundEngine {
     this.initContext();
     const ctx=this.ctx;if(!ctx)return;
     const bus=ctx.createGain();bus.gain.value=.12;bus.connect(ctx.destination);this.musicBus=bus;
+    // Slow, minor-modal tension: low drums, breathy texture and evolving drones.
+    // No bright arpeggio, coin chirp or bell melody in the background score.
     let beat=0;
-    const noise=ctx.createBuffer(1,Math.ceil(ctx.sampleRate*.15),ctx.sampleRate);
-    const samples=noise.getChannelData(0);for(let i=0;i<samples.length;i++)samples[i]=(Math.random()*2-1)*(1-i/samples.length);
-    const percussion=(deep:boolean)=>{
-      const t=ctx.currentTime;
-      const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
-      source.buffer=noise;filter.type=deep?'lowpass':'highpass';filter.frequency.value=deep?250:3500;
-      gain.gain.setValueAtTime(deep?.6:.12,t);gain.gain.exponentialRampToValueAtTime(.001,t+.14);
-      source.connect(filter);filter.connect(gain);gain.connect(bus);source.start();source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
+    const period=era==='agricultural'?410:era==='scientific'?480:445;
+    const root=era==='scientific'?55:era==='agricultural'?65.41:58.27;
+    const noise=ctx.createBuffer(1,ctx.sampleRate*2,ctx.sampleRate);
+    const samples=noise.getChannelData(0);let brown=0;
+    for(let i=0;i<samples.length;i++){brown=(brown+(Math.random()*2-1)*.025)/1.025;samples[i]=brown*4;}
+    const texture=(duration:number,level:number,cutoff:number)=>{
+      const t=ctx.currentTime,source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),gain=ctx.createGain();
+      source.buffer=noise;source.loop=true;filter.type='lowpass';filter.frequency.value=cutoff;
+      gain.gain.setValueAtTime(.001,t);gain.gain.linearRampToValueAtTime(level,t+duration*.25);gain.gain.exponentialRampToValueAtTime(.001,t+duration);
+      source.connect(filter);filter.connect(gain);gain.connect(bus);source.start();source.stop(t+duration+.05);
+      source.onended=()=>{source.disconnect();filter.disconnect();gain.disconnect();};
     };
-    const voice=(hz:number,duration:number,volume:number,type:OscillatorType='sine')=>{
-      const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;
-      o.type=type;o.frequency.value=hz;g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+duration);
-      o.connect(g);g.connect(bus);o.start(t);o.stop(t+duration+.02);o.onended=()=>{o.disconnect();g.disconnect();};
+    const voice=(hz:number,duration:number,level:number,attack=.15,delay=0,drop=false)=>{
+      const t=ctx.currentTime+delay,o=ctx.createOscillator(),g=ctx.createGain();
+      o.type='sine';o.frequency.setValueAtTime(hz,t);
+      if(drop)o.frequency.exponentialRampToValueAtTime(hz*.42,t+.24);
+      else o.frequency.linearRampToValueAtTime(hz*1.008,t+duration);
+      g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(level,t+attack);g.gain.exponentialRampToValueAtTime(.001,t+duration);
+      o.connect(g);g.connect(bus);o.start(t);o.stop(t+duration+.05);o.onended=()=>{o.disconnect();g.disconnect();};
     };
-    const melody=era==="scientific"?[0,7,14,19,12,7,4,14,0,12,16,19,14,7,4,2]:era==="agricultural"?[0,4,7,12,7,4,9,7,5,9,12,16,12,9,7,4]:[0,7,12,14,7,4,2,7,0,4,7,16,14,12,7,2];
     const tick=()=>{
       if(ctx.state!=='running')return;
-      voice(220*Math.pow(2,melody[beat%16]/12),.55,.22,'sine');
-      if(beat%2===0)voice(55*Math.pow(2,[0,0,5,7][Math.floor(beat/8)%4]/12),.55,.55);
-      percussion(beat%4===0);
-      if(beat%4===0)voice(65,.22,.6,'sine');
-      if(beat%16===0){voice(110,2,.16);voice(164.81,2,.1);voice(220,1.8,.08);}
-      if(beat%8===5){voice(880,.5,.08);voice(1320,.7,.035);}
-      if(beat%8===0)voice(440,.95,.12);
+      const step=beat%16;
+      if(step===0){voice(root,7,.32,1.5);voice(root*1.5,6.5,.12,2);voice(root*2.002,6,.08,1.8);texture(6,.12,480);}
+      if([0,6,8,11,14].includes(step)){
+        voice(step===0||step===8?92:125,.65,step===0||step===8?.65:.27,.008,0,true);
+        texture(.2,.09,320);
+      }
+      if(step===4||step===13){
+        const hz=root*(step===4?2:2.12);
+        voice(hz,2.1,.13,.5);voice(hz,1.5,.045,.35,.48);
+      }
       beat++;
-    };tick();this.musicTimer=setInterval(tick,era==="scientific"?350:era==="agricultural"?280:312.5);
+    };
+    tick();this.musicTimer=setInterval(tick,period);
   }
+
   public stopMusic() {
     if(this.musicTimer)clearInterval(this.musicTimer);this.musicTimer=null;
     this.musicBus?.disconnect();this.musicBus=null;
@@ -124,8 +136,8 @@ class SoundEngine {
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, now);
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+      osc.frequency.setValueAtTime(170, now);
+      osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
 
       gain.gain.setValueAtTime(0.15, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
@@ -176,13 +188,13 @@ class SoundEngine {
 
     try {
       const now = this.ctx.currentTime;
-      const notes = [329.63, 392.0, 493.88, 587.33]; // E minor pentatonic
+      const notes = [146.83, 174.61, 220, 164.81]; // E minor pentatonic
       notes.forEach((freq, idx) => {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
 
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+        osc.frequency.setValueAtTime(freq * 0.35, now + idx * 0.08);
 
         gain.gain.setValueAtTime(0, now + idx * 0.08);
         gain.gain.linearRampToValueAtTime(0.12, now + idx * 0.08 + 0.05);
@@ -213,7 +225,7 @@ class SoundEngine {
         const gain = this.ctx!.createGain();
 
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(f, now + i * 0.09);
+        osc.frequency.setValueAtTime(f * 0.35, now + i * 0.09);
 
         gain.gain.setValueAtTime(0.18, now + i * 0.09);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.09 + 0.5);
@@ -243,7 +255,7 @@ class SoundEngine {
         const gain = this.ctx!.createGain();
 
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(f, now + i * 0.12);
+        osc.frequency.setValueAtTime(f * 0.35, now + i * 0.12);
 
         gain.gain.setValueAtTime(0.15, now + i * 0.12);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.9);
@@ -282,7 +294,7 @@ class SoundEngine {
           const gain = this.ctx!.createGain();
 
           osc.type = step === 3 ? 'triangle' : 'sine';
-          osc.frequency.setValueAtTime(freq, stepTime);
+          osc.frequency.setValueAtTime(freq * 0.35, stepTime);
 
           const vol = step === 3 ? 0.22 : 0.14;
           gain.gain.setValueAtTime(vol, stepTime);
@@ -313,7 +325,7 @@ class SoundEngine {
 
       osc.type = 'sine';
       osc.frequency.setValueAtTime(180, now);
-      osc.frequency.exponentialRampToValueAtTime(420, now + 0.18);
+      osc.frequency.exponentialRampToValueAtTime(100, now + 0.18);
 
       gain.gain.setValueAtTime(0.2, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
@@ -400,8 +412,8 @@ class SoundEngine {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(320, now);
-      osc.frequency.exponentialRampToValueAtTime(160, now + 0.12);
+      osc.frequency.setValueAtTime(120, now);
+      osc.frequency.exponentialRampToValueAtTime(65, now + 0.12);
       gain.gain.setValueAtTime(0.14, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
       osc.connect(gain);
@@ -443,7 +455,7 @@ class SoundEngine {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(f, now + i * 0.05);
+        osc.frequency.setValueAtTime(f * 0.35, now + i * 0.05);
         gain.gain.setValueAtTime(0.18, now + i * 0.05);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.3);
         osc.connect(gain);
@@ -543,7 +555,7 @@ class SoundEngine {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+        osc.frequency.setValueAtTime(freq * 0.35, now + idx * 0.08);
         gain.gain.setValueAtTime(0.08, now + idx * 0.08);
         gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
         osc.connect(gain);
@@ -598,7 +610,7 @@ class SoundEngine {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, now + i * 0.06);
+        osc.frequency.setValueAtTime(freq * 0.35, now + i * 0.06);
         gain.gain.setValueAtTime(0.18, now + i * 0.06);
         gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.45);
         osc.connect(gain);

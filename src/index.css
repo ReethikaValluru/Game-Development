@@ -43,9 +43,9 @@ a:focus-visible {
   outline-offset: 3px;
 }
 button.primary {
-  background: #e9af53;
+  background: #8fc4a5;
   color: #19291e;
-  border-color: #e9af53;
+  border-color: #8fc4a5;
   font-weight: 750;
 }
 button[aria-pressed="true"] {
@@ -648,20 +648,20 @@ html[data-motion="reduced"] *::after {
 }
 
 /* Twilight storybook accents retain the high-contrast controls. */
-.impact-meter {position:absolute;top:132px;right:18px;background:#25283ee8;color:#ffe2aa;border:1px solid #bda67a;border-radius:20px;padding:8px 14px;font-size:12px;max-width:250px;}
-.death-overlay{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;background:#251b36d9;color:#ffe5c3;backdrop-filter:blur(5px);}
+.impact-meter {position:absolute;top:132px;right:18px;background:#0c242be8;color:#c8e5d8;border:1px solid #bda67a;border-radius:20px;padding:8px 14px;font-size:12px;max-width:250px;}
+.death-overlay{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;background:#061a20d9;color:#d7e8df;backdrop-filter:blur(5px);}
 .death-overlay h2{font-family:Georgia,serif;font-size:clamp(32px,6vw,64px);margin:16px 0;}
-.story-quest{padding:20px;border:1px solid #9e8b6c;border-radius:16px;background:linear-gradient(130deg,#334c4b,#46394e);color:#fff0d7;margin-bottom:24px;}
-.story-quest button{display:block;width:100%;margin:10px 0;padding:12px;text-align:left;border:1px solid #a6c1ae;border-radius:10px;background:#fff0d7;color:#292c35;cursor:pointer;}
-.story-quest button[aria-pressed=true]{background:#b7e4ce;outline:2px solid #e2b26a;}
+.story-quest{padding:20px;border:1px solid #9e8b6c;border-radius:16px;background:linear-gradient(130deg,#334c4b,#153c36);color:#d3e6dc;margin-bottom:24px;}
+.story-quest button{display:block;width:100%;margin:10px 0;padding:12px;text-align:left;border:1px solid #a6c1ae;border-radius:10px;background:#d3e6dc;color:#142b2c;cursor:pointer;}
+.story-quest button[aria-pressed=true]{background:#b7e4ce;outline:2px solid #75b7a0;}
 .story-quest a{color:#bcebd8;}
 @media(max-width:600px){.impact-meter{top:145px;right:10px;font-size:10px;max-width:180px;padding:5px 9px;}}
 
 /* Moonlit glass, warm amber actions and luminous turquoise accents. */
-.play-top,.objective-card,.resource-strip{background:linear-gradient(135deg,#102d38ed,#282342e8);border-color:#58949c80;box-shadow:0 8px 30px #060d2033;}
-.title-screen{background-color:#111b36;}
-.title-copy h1{color:#f7e5c0;text-shadow:0 4px 35px #62cbd044;}
-.title-select,.dialog{background:linear-gradient(145deg,#172e38f5,#28223bf5);}
-button.primary{background:linear-gradient(120deg,#f0ce87,#db9f58);color:#182735;box-shadow:0 0 22px #eeb86922;}
+.play-top,.objective-card,.resource-strip{background:linear-gradient(135deg,#102d38ed,#102c34e8);border-color:#58949c80;box-shadow:0 8px 30px #060d2033;}
+.title-screen{background-color:#07191f;}
+.title-copy h1{color:#deeee6;text-shadow:0 4px 35px #62cbd044;}
+.title-select,.dialog{background:linear-gradient(145deg,#172e38f5,#102b2cf5);}
+button.primary{background:linear-gradient(120deg,#9bcbb3,#4a8d78);color:#182735;box-shadow:0 0 22px #eeb86922;}
 .chapter-options button[aria-pressed=true]{border-color:#86e1d8;box-shadow:inset 0 0 20px #66d2dc16;}
-.play-bottom button{border-color:#619da4;background:linear-gradient(145deg,#244754,#252b43);}
+.play-bottom button{border-color:#619da4;background:linear-gradient(145deg,#244754,#102b35);}

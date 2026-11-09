@@ -226,7 +226,7 @@ export class World3D {
 
     // 3. Scene & Natural Atmosphere (Warm Sunlit Earth, NOT all blue!)
     this.scene = new THREE.Scene();
-    const skyColor = 0x555574; // Sunlit misty forest horizon
+    const skyColor = 0x122d32; // Sunlit misty forest horizon
     this.scene.background = new THREE.Color(skyColor);
     this.scene.fog = new THREE.FogExp2(skyColor, 0.014);
 
@@ -294,14 +294,14 @@ export class World3D {
     const backdropGroup = new THREE.Group();
     this.camera.add(backdropGroup);
     this.scene.add(this.camera);
-    const moon = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 16), new THREE.MeshBasicMaterial({color: 0xffe5c2, fog: false}));
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(9, 24, 16), new THREE.MeshBasicMaterial({color: 0xc9e6da, fog: false}));
     moon.position.set(35, 36, -180);
     backdropGroup.add(moon);
-    const halo = new THREE.Mesh(new THREE.RingGeometry(10, 10.3, 48), new THREE.MeshBasicMaterial({color:0xf7cdae, transparent:true, opacity:0.6, side:THREE.DoubleSide, fog:false}));
+    const halo = new THREE.Mesh(new THREE.RingGeometry(10, 10.3, 48), new THREE.MeshBasicMaterial({color:0x86bba8, transparent:true, opacity:0.6, side:THREE.DoubleSide, fog:false}));
     halo.position.copy(moon.position); backdropGroup.add(halo);
 
     // A camera-relative gradient sky keeps the horizon continuous throughout the run.
-    const skyColors=this.currentEra==='agricultural'?[0x243851,0xeeb77a]:this.currentEra==='scientific'?[0x080d2e,0x526595]:[0x101332,0x497a82];
+    const skyColors=this.currentEra==='agricultural'?[0x101f26,0x4d7968]:this.currentEra==='scientific'?[0x060f1d,0x34556b]:[0x07151c,0x285347];
     const sky=new THREE.Mesh(new THREE.PlaneGeometry(620,420),new THREE.ShaderMaterial({
       uniforms:{top:{value:new THREE.Color(skyColors[0])},bottom:{value:new THREE.Color(skyColors[1])}},
       vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
@@ -363,11 +363,11 @@ export class World3D {
     const trailGeo = new THREE.PlaneGeometry(8.2, World3D.SEGMENT_LENGTH);
     trailGeo.rotateX(-Math.PI / 2);
 
-    let trailColor = 0xb08a83; // Sunlit sandstone & meadow dirt
+    let trailColor = 0x48605a; // Sunlit sandstone & meadow dirt
     if (this.currentLandscape === 'wetland_oasis') trailColor = 0x8a927d; // Mossy riverside flagstone
     if (this.currentLandscape === 'mountain_pass') trailColor = 0x8f8476; // Mountain stone trail
 
-    if(this.currentEra === "agricultural") trailColor=0xbc995e;
+    if(this.currentEra === "agricultural") trailColor=0x52685a;
     if(this.currentEra === "scientific") trailColor=0x556781;
     const trailMat = new THREE.MeshStandardMaterial({
       color: trailColor,
@@ -379,7 +379,7 @@ export class World3D {
     seg.add(trailMesh);
 
     // Repeated paving stones emphasize forward speed without narrowing the lanes.
-    const paving = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2,.035,2.8),new THREE.MeshStandardMaterial({color:this.currentEra==='agricultural'?0xc4a474:0x8594a0,roughness:.95}),36);
+    const paving = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2,.035,2.8),new THREE.MeshStandardMaterial({color:this.currentEra==='agricultural'?0x688173:0x8594a0,roughness:.95}),36);
     const tile=new THREE.Object3D();
     for(let i=0;i<36;i++){tile.position.set((i%3-1)*2.4,.02,-17+Math.floor(i/3)*3.1);tile.updateMatrix();paving.setMatrixAt(i,tile.matrix);}seg.add(paving);
     // Natural stone border curbs
@@ -463,7 +463,7 @@ export class World3D {
 
     // Sculpted banks, luminous fungi and ochre trail inlays frame the playable lanes.
     const glow = new THREE.MeshStandardMaterial({color:0x9ff5d2, emissive:0x52d9bd, emissiveIntensity:0.8, roughness:0.5});
-    const earth = new THREE.MeshStandardMaterial({color:0x75556e, roughness:1});
+    const earth = new THREE.MeshStandardMaterial({color:0x243e38, roughness:1});
     for (const side of [-1, 1]) {
       for (let i=0;i<(this.currentEra === "cognitive" ? 4 : 1);i++) {
         const z = -15+i*9;
@@ -489,7 +489,7 @@ export class World3D {
       const crown=new THREE.Mesh(new THREE.OctahedronGeometry(.35),new THREE.MeshStandardMaterial({color:0x7bf4e4,emissive:0x38c9d3,emissiveIntensity:1}));
       crown.position.set(side*4.8,4.1,-17);seg.add(crown);
       for(let i=0;i<3;i++){
-        const crystal=new THREE.Mesh(new THREE.ConeGeometry(.18,.8+i*.3,5),new THREE.MeshStandardMaterial({color:0x8f9dfb,emissive:0x6d54ca,emissiveIntensity:.55}));
+        const crystal=new THREE.Mesh(new THREE.ConeGeometry(.18,.8+i*.3,5),new THREE.MeshStandardMaterial({color:0x659db4,emissive:0x225c78,emissiveIntensity:.55}));
         crystal.position.set(side*(5.3+i*.35),.45,-4+i*.3);crystal.rotation.z=side*i*.15;seg.add(crystal);
       }
     }
@@ -503,8 +503,8 @@ export class World3D {
 
   private addChapterSettlement(seg: THREE.Group) {
     const agricultural=this.currentEra==='agricultural';
-    const stone=new THREE.MeshStandardMaterial({color:agricultural?0xd8b588:0xa5b8cd,roughness:.9});
-    const roof=new THREE.MeshStandardMaterial({color:agricultural?0x977042:0x527c9b,roughness:.8});
+    const stone=new THREE.MeshStandardMaterial({color:agricultural?0x6e8374:0xa5b8cd,roughness:.9});
+    const roof=new THREE.MeshStandardMaterial({color:agricultural?0x354c3e:0x527c9b,roughness:.8});
     const light=new THREE.MeshStandardMaterial({color:0xffdc91,emissive:0xffb651,emissiveIntensity:.8});
     for(const side of [-1,1])for(let i=0;i<3;i++){
       const group=new THREE.Group();group.position.set(side*(agricultural?9:10),0,-13+i*13);
@@ -570,9 +570,9 @@ export class World3D {
     const cluster = new THREE.Group();
 
     const colors = [
-      0xdd2222, // Crimson Poppy
-      0x8833cc, // Purple Lupine
-      0xffbb11, // Golden Buttercup
+      0x518f75, // Crimson Poppy
+      0x397363, // Purple Lupine
+      0x9fbb78, // Golden Buttercup
       0x2288ff, // Bluebell
     ];
 
@@ -601,7 +601,7 @@ export class World3D {
   // Majestic Sunlit Canopy Tree (Inspired by Images 2 and 3)
   private createSunlitCanopyTree(): THREE.Group {
     const tree = new THREE.Group();
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x61435b, roughness: 0.95 });
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x233e36, roughness: 0.95 });
 
     // Trunk with natural slight curve (like Image 2)
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.85, 6.5, 7), woodMat);
@@ -618,8 +618,8 @@ export class World3D {
     // Warm sun-kissed leafy foliage (Yellow-green & golden autumn tones - Image 2 & 3)
     const isGoldenAutumn = Math.random() > 0.5;
     const leafMat = new THREE.MeshStandardMaterial({
-      color: isGoldenAutumn ? 0x8c6fc5 : 0x329b9c,
-      emissive:isGoldenAutumn?0x5e246e:0x126975,emissiveIntensity:.3,
+      color: isGoldenAutumn ? 0x347653 : 0x329b9c,
+      emissive:isGoldenAutumn?0x12412c:0x126975,emissiveIntensity:.3,
       roughness: 0.85,
     });
 
@@ -792,7 +792,7 @@ export class World3D {
   private createAmberGemMesh(): THREE.Group {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xffbb11,
+      color: 0x9fbb78,
       emissive: 0xcc7700,
       emissiveIntensity: 0.45,
       roughness: 0.2,
@@ -921,7 +921,7 @@ export class World3D {
   private createSapiensChieftainCharacter(): THREE.Group {
     const player = new THREE.Group();
     const skinMat = new THREE.MeshStandardMaterial({ color: 0x9c6c4c, roughness: 0.7 });
-    const furMat = new THREE.MeshStandardMaterial({ color: 0xa85252, roughness: 0.95 });
+    const furMat = new THREE.MeshStandardMaterial({ color: 0x294437, roughness: 0.95 });
     const spearMat = new THREE.MeshStandardMaterial({ color: 0x5a432e, roughness: 0.8 });
     const flintMat = new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.3, metalness: 0.1 });
 
@@ -945,7 +945,7 @@ export class World3D {
     player.add(hair);
 
     // Ochre cloak, bead talisman and dark hair create a readable storybook silhouette.
-    const cloak = new THREE.Mesh(new THREE.ConeGeometry(.47,.95,7,1,true),new THREE.MeshStandardMaterial({color:this.currentEra==='cognitive'?0x296f86:this.currentEra==='agricultural'?0xbd7846:0x5c5796,side:THREE.DoubleSide,roughness:1}));
+    const cloak = new THREE.Mesh(new THREE.ConeGeometry(.47,.95,7,1,true),new THREE.MeshStandardMaterial({color:this.currentEra==='cognitive'?0x296f86:this.currentEra==='agricultural'?0x436747:0x234563,side:THREE.DoubleSide,roughness:1}));
     cloak.position.set(0,1.02,.18);cloak.scale.z=.65;player.add(cloak);
     const band = new THREE.Mesh(new THREE.TorusGeometry(.255,.04,5,12),new THREE.MeshStandardMaterial({color:0x74d7c2,emissive:0x286e67,emissiveIntensity:.4}));
     band.rotation.x=Math.PI/2;band.position.y=1.79;player.add(band);
@@ -1497,7 +1497,7 @@ export class World3D {
 
   public setLandscape(landscape: SapiensLandscape) {
     this.currentLandscape = landscape;
-    let skyHex = 0x555574;
+    let skyHex = 0x122d32;
     let sunHex = 0xfffae0;
     let sunInt = 1.85;
     let hemiSky = 0xddeeff;
@@ -1510,22 +1510,22 @@ export class World3D {
       hemiSky = 0xcde8e4;
       hemiGround = 0x3d6e55;
     } else if (landscape === 'mountain_pass') {
-      skyHex = 0x716582; // Sunlit mountain canyon haze (Image 2)
+      skyHex = 0x172c40; // Sunlit mountain canyon haze (Image 2)
       sunHex = 0xfff0d8;
       sunInt = 2.0;
       hemiSky = 0xd2e3f4;
       hemiGround = 0x64614a;
     } else {
       // river_meadow
-      skyHex = 0x555574; // Sun-drenched wildflower meadow (Image 3)
+      skyHex = 0x122d32; // Sun-drenched wildflower meadow (Image 3)
       sunHex = 0xfffae0;
       sunInt = 1.85;
       hemiSky = 0xddeeff;
       hemiGround = 0x5a7d36;
     }
 
-    if(this.currentEra==='agricultural'){skyHex=0xb99a78;sunHex=0xffd090;sunInt=2;hemiSky=0xffe0ab;hemiGround=0x83613d;}
-    if(this.currentEra==='scientific'){skyHex=0x192c50;sunHex=0xb9d8ff;sunInt=1.2;hemiSky=0x7dace2;hemiGround=0x484a70;}
+    if(this.currentEra==='agricultural'){skyHex=0x2c4f42;sunHex=0xb5d6ba;sunInt=2;hemiSky=0xb5d2c4;hemiGround=0x294235;}
+    if(this.currentEra==='scientific'){skyHex=0x192c50;sunHex=0xb9d8ff;sunInt=1.2;hemiSky=0x7dace2;hemiGround=0x243d4a;}
     this.scene.background = new THREE.Color(skyHex);
     if (this.scene.fog instanceof THREE.FogExp2) {
       this.scene.fog.color = new THREE.Color(skyHex);
