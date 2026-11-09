@@ -8,7 +8,7 @@ async function begin(page: Page) {
   await page
     .getByRole("button", { name: "Enter the trail / Skip intro" })
     .click();
-  await expect.poll(async () => parseInt(await page.getByTestId("distance").innerText())).toBeGreaterThan(0);
+  await expect.poll(async () => parseInt(await page.getByTestId("distance").innerText())).toBeGreaterThan(10);
 }
 
 test("desktop tutorial, pause, decisions and checkpoint continuation", async ({
