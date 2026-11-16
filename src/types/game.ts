@@ -169,4 +169,77 @@ export interface RunStats {
   activeEvent: DynamicWorldEvent | null;
 }
 
+export type SimProductType = 'berries' | 'flint' | 'wheat' | 'ivory';
 
+export interface SimCatalogItem {
+  id: SimProductType;
+  name: string;
+  eraLabel: string;
+  harariMeaning: string;
+  crateCost: number;
+  crateUnits: number;
+  baseBarterPrice: number;
+  knowledgePerSale: number;
+  mythPerSale: number;
+  colorHex: string;
+  icon: string;
+}
+
+export interface SimRackState {
+  id: string;
+  label: string;
+  productType: SimProductType;
+  stock: number;
+  maxStock: number;
+  price: number;
+  x: number;
+  z: number;
+  rotationY: number;
+}
+
+export interface SimStaffMember {
+  id: string;
+  role: 'restocker' | 'barterer';
+  name: string;
+  cost: number;
+  hired: boolean;
+  description: string;
+}
+
+export interface SimInteractionPrompt {
+  key: string;
+  label: string;
+  sublabel?: string;
+  actionType: 'pickup_crate' | 'stock_rack' | 'checkout' | 'forage' | 'terminal' | 'place_rack';
+}
+
+export interface SimCheckoutState {
+  customerName: string;
+  customerTribe: string;
+  items: { productType: SimProductType; qty: number; unitPrice: number }[];
+  totalShells: number;
+  scannedCount: number;
+  totalItems: number;
+}
+
+export interface SimState {
+  shells: number; // Cowrie Shells / Barley Coins (Harari's currency myth)
+  campLevel: number;
+  campXp: number;
+  nextLevelXp: number;
+  expansionTier: number; // 1 = Clearing, 2 = River Outpost, 3 = Grand Bazaar
+  isCampOpen: boolean;
+  dayNumber: number;
+  carriedCrate: { productType: SimProductType; units: number } | null;
+  placementMode: { rackCost: number; productType: SimProductType } | null;
+  dockCratesCount: number;
+  queueLength: number;
+  tradesCompleted: number;
+  totalShellsEarned: number;
+  prices: Record<SimProductType, number>;
+  restockerHired: boolean;
+  bartererHired: boolean;
+  activePrompt: SimInteractionPrompt | null;
+  activeCheckout: SimCheckoutState | null;
+  feedMessages: { id: string; text: string; tone: 'good' | 'warn' | 'myth' }[];
+}

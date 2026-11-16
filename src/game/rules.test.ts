@@ -16,6 +16,11 @@ import {
   handleBumpCollision,
   getLandscapeEvents,
   applyEventResourcePerks,
+  calculateOrderCost,
+  calculateCustomerDemandMultiplier,
+  calculateTradeReward,
+  applyCampXp,
+  isPlacementValid,
 } from './rules';
 
 test('Dunbar friction logic: 0 when below limit, positive when above', () => {
@@ -154,4 +159,31 @@ test('Location-specific dynamic events and perk multipliers', () => {
   assert.equal(boosted.calories, 100); // 2.0x multiplier
   assert.equal(boosted.knowledge, 30); // 1.5x multiplier
 });
+
+test('Sapiens Simulator ordering, trade rewards, XP leveling, and rack placement validation', () => {
+  assert.equal(calculateOrderCost('berries', 2), 48);
+  assert.equal(calculateCustomerDemandMultiplier('berries', 8).fairLabel, 'Fair Value');
+  assert.equal(calculateCustomerDemandMultiplier('berries', 6).fairLabel, 'Bargain');
+  assert.equal(calculateCustomerDemandMultiplier('berries', 20).fairLabel, 'Overpriced');
+
+  const trade = calculateTradeReward(
+    [{ productType: 'flint', qty: 2, unitPrice: 14 }],
+    null
+  );
+  assert.equal(trade.shells, 28);
+  assert.equal(trade.knowledge, 8);
+  assert.equal(trade.myth, 4);
+  assert.ok(trade.mythSurgeGain > 0);
+
+  const lvl = applyCampXp(1, 90, 100, 30);
+  assert.equal(lvl.level, 2);
+  assert.equal(lvl.xp, 20);
+  assert.equal(lvl.leveledUp, true);
+
+  // Placement invalid over campfire (0, 0) or overlapping existing rack
+  assert.equal(isPlacementValid(0, 0, 1, []), false);
+  assert.equal(isPlacementValid(5, 0, 1, []), true);
+  assert.equal(isPlacementValid(5, 0, 1, [{ x: 5.5, z: 0 }]), false);
+});
+
 

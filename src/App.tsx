@@ -1,746 +1,907 @@
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { World3D, World3DControls } from './game/scene/world3d';
+import { soundEngine } from './game/audio';
 import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-import type { World3D, World3DControls } from "./game/scene/world3d";
-import { StoryQuest } from "./components/StoryQuest";
-import { soundEngine } from "./game/audio";
-import { createControls } from "./game/session";
+  GameState,
+  HistoricalEra,
+  SapiensLandscape,
+  GameResources,
+  Quest,
+  HistoricalDilemma,
+  DiscoveryTech,
+  DilemmaChoice,
+  Achievement,
+  RunStats,
+  DynamicWorldEvent,
+  SimState,
+  SimRackState,
+  SimProductType,
+  SimCheckoutState,
+} from './types/game';
 import {
-  campaignReducer,
-  CHAPTERS,
-  LANDSCAPES,
-  newCampaign,
-  objectives,
-  type Campaign,
-} from "./game/campaign";
-import { loadCheckpoint, saveCheckpoint, type Checkpoint } from "./game/save";
-import {
-  DISCOVERY_TECHS,
+  INITIAL_RESOURCES,
   HISTORICAL_DILEMMAS,
+  DISCOVERY_TECHS,
+  CODEX_ENTRIES,
+  INITIAL_QUESTS,
   INITIAL_ACHIEVEMENTS,
-  canUnlockTech,
-} from "./game/rules";
-import { Dialog } from "./components/Dialog";
-import {
-  TitleScreen,
-  LANDSCAPE_ART,
-  LANDSCAPE_NAMES,
-} from "./components/TitleScreen";
-import { PlayHUD } from "./components/PlayHUD";
-const AIStudio = lazy(() =>
-  import("./components/AIStudioModal").then((m) => ({
-    default: m.AIStudioModal,
-  })),
-);
-type Settings = {
-  quality: "low" | "high";
-  reducedMotion: boolean;
-  muted: boolean;
+  SIM_CATALOG,
+  SIM_RACK_COST,
+  SIM_EXPANSIONS,
+  SIM_STAFF_OPTIONS,
+  getLandscapeEvents,
+  calculateOrderCost,
+  calculateTradeReward,
+  applyCampXp,
+  checkNewAchievements,
+  calculateTurnConsumption,
+  applyDilemmaEffects,
+  deductTechCost,
+  checkVictoryCondition,
+  checkDefeatCondition,
+} from './game/rules';
+import { TitleScreen } from './components/TitleScreen';
+import { HUD } from './components/HUD';
+import { DilemmaModal } from './components/DilemmaModal';
+import { TechTreeModal } from './components/TechTreeModal';
+import { HarariCodexModal } from './components/HarariCodexModal';
+import { CampTerminalModal } from './components/CampTerminalModal';
+import { AchievementToast } from './components/AchievementToast';
+import { AchievementsModal } from './components/AchievementsModal';
+import { VictoryModal, GameOverModal, PauseModal } from './components/GameStatusModals';
+
+const INITIAL_SIM_STATE: SimState = {
+  shells: 140,
+  campLevel: 1,
+  campXp: 0,
+  nextLevelXp: 100,
+  expansionTier: 1,
+  isCampOpen: true,
+  dayNumber: 1,
+  carriedCrate: null,
+  placementMode: null,
+  dockCratesCount: 2,
+  queueLength: 0,
+  tradesCompleted: 0,
+  totalShellsEarned: 0,
+  prices: {
+    berries: SIM_CATALOG.berries.baseBarterPrice,
+    flint: SIM_CATALOG.flint.baseBarterPrice,
+    wheat: SIM_CATALOG.wheat.baseBarterPrice,
+    ivory: SIM_CATALOG.ivory.baseBarterPrice,
+  },
+  restockerHired: false,
+  bartererHired: false,
+  activePrompt: null,
+  activeCheckout: null,
+  feedMessages: [
+    {
+      id: 'welcome',
+      text: 'Walk to the Riverbank Dock [E], carry crates to racks, then barter at the Counter!',
+      tone: 'myth',
+    },
+  ],
 };
-function getSettings(): Settings {
-  const defaults: Settings = {
-    quality: "low",
-    reducedMotion: window.matchMedia("(prefers-reduced-motion: reduce)")
-      .matches,
-    muted: false,
-  };
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("sapiens.settings") ?? "null",
-    );
-    return saved
-      ? {
-          quality: saved.quality === "high" ? "high" : "low",
-          reducedMotion:
-            typeof saved.reducedMotion === "boolean"
-              ? saved.reducedMotion
-              : defaults.reducedMotion,
-          muted: saved.muted === true,
-        }
-      : defaults;
-  } catch {
-    return defaults;
-  }
-}
+
 export default function App() {
-  const [s, dispatch] = useReducer(campaignReducer, undefined, () =>
-    newCampaign(),
-  );
-  const current = useRef(s);
-  useLayoutEffect(() => {
-    current.current = s;
-  }, [s]);
-  const [screen, setScreen] = useState<"title" | "playing">("title");
-  const [menu, setMenu] = useState<string | null>(null);
-  const [dead, setDead] = useState(false);
-  const [intro, setIntro] = useState(false);
-  const [epoch, setEpoch] = useState(0);
-  const [checkpoint, setCheckpoint] = useState<Checkpoint | null>(null);
-  const [notice, setNotice] = useState("");
-  const [settings, setSettings] = useState(getSettings);
-  const [worldReady, setWorldReady] = useState(false);
-  const [worldError, setWorldError] = useState("");
-  const [sprint, setSprint] = useState(false);
-  const [perf, setPerf] = useState({ fps: 0, drawCalls: 0 });
-  const mount = useRef<HTMLDivElement>(null),
-    world = useRef<World3D | null>(null);
-  const controls = useRef<World3DControls>(createControls());
-  const distanceOffset = useRef(0);
-  const paused =
-    screen !== "playing" || dead || !!menu || intro || s.status !== "playing";
-  const pausedRef = useRef(paused);
-  useLayoutEffect(() => {
-    pausedRef.current = paused;
-  }, [paused]);
-  const closeMenu = useCallback(() => setMenu(null), []);
-  const persist = useCallback(() => {
-    try {
-      const error = saveCheckpoint(localStorage, current.current);
-      setNotice(error ?? "Checkpoint saved");
-      if (!error)
-        setCheckpoint({
-          version: 1,
-          savedAt: new Date().toISOString(),
-          campaign: current.current,
-        });
-    } catch {
-      setNotice(
-        "Browser storage is unavailable. Your run continues without saves.",
+  const canvasMountRef = useRef<HTMLDivElement>(null);
+  const worldRef = useRef<World3D | null>(null);
+
+  // Core Game State
+  const [gameState, setGameState] = useState<GameState>('title');
+  const [era, setEra] = useState<HistoricalEra>('cognitive');
+  const [landscape, setLandscape] = useState<SapiensLandscape>('river_meadow');
+  const [resources, setResources] = useState<GameResources>(INITIAL_RESOURCES);
+  const [turnCount, setTurnCount] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const [firstPerson, setFirstPerson] = useState(false);
+
+  // Simulator State
+  const [simState, setSimState] = useState<SimState>(INITIAL_SIM_STATE);
+  const [racks, setRacks] = useState<SimRackState[]>([]);
+
+  // Quests & Tech
+  const [quests, setQuests] = useState<Quest[]>(INITIAL_QUESTS);
+  const [techs, setTechs] = useState<DiscoveryTech[]>(DISCOVERY_TECHS);
+  const [unlockedTechIds, setUnlockedTechIds] = useState<string[]>(['tree_of_knowledge']);
+
+  // Modals
+  const [activeDilemma, setActiveDilemma] = useState<HistoricalDilemma | null>(null);
+  const [isTechTreeOpen, setIsTechTreeOpen] = useState(false);
+  const [isCodexOpen, setIsCodexOpen] = useState(false);
+  const [isTerminalOpen, setIsTerminalOpen] = useState(false);
+  const [isAchievementsOpen, setIsAchievementsOpen] = useState(false);
+
+  // Achievements & Toasts
+  const [achievements, setAchievements] = useState<Achievement[]>(INITIAL_ACHIEVEMENTS);
+  const [activeToast, setActiveToast] = useState<Achievement | null>(null);
+  const [toastQueue, setToastQueue] = useState<Achievement[]>([]);
+
+  // World Events, Bump/Respawn & Myth Surge Stats
+  const [runStats, setRunStats] = useState<RunStats>({
+    pickupsCollected: 0,
+    jumpsCount: 0,
+    slidesCount: 0,
+    distanceTraveled: 0,
+    comboStreak: 0,
+    maxCombo: 0,
+    sprintEnergy: 100,
+    score: 0,
+    currentLane: 0,
+    activePowerUp: null,
+    powerUpTimeLeft: 0,
+    beastAlert: false,
+    stumbles: 0,
+    landscape: 'river_meadow',
+    mythSurge: 0,
+    bumpCount: 0,
+    maxBumps: 2,
+    isRespawning: false,
+    activeEvent: null,
+  });
+
+  // Live Keyboard Controls Ref
+  const controlsRef = useRef<World3DControls>({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    sprint: false,
+    jump: false,
+    turnLeft: false,
+    turnRight: false,
+  });
+
+  const respawnTimerRef = useRef<number | null>(null);
+  const eventCycleIndexRef = useRef<number>(0);
+
+  // Sync gameState to body dataset
+  useEffect(() => {
+    document.body.dataset.state = gameState;
+  }, [gameState]);
+
+  const pushFeed = useCallback((text: string, tone: 'good' | 'warn' | 'myth' = 'good') => {
+    setSimState(prev => ({
+      ...prev,
+      feedMessages: [
+        ...prev.feedMessages.slice(-4),
+        { id: `${Date.now()}_${Math.random()}`, text, tone },
+      ],
+    }));
+  }, []);
+
+  const checkAchievements = useCallback((
+    curRes: GameResources,
+    curTechs: string[],
+    curStats: RunStats
+  ) => {
+    setAchievements(prevAchs => {
+      const { updatedAchievements, newlyUnlocked } = checkNewAchievements(
+        curRes,
+        curTechs,
+        curStats,
+        prevAchs,
+        turnCount
       );
-    }
-  }, []);
-  useEffect(() => {
-    try {
-      const loaded = loadCheckpoint(localStorage);
-      setCheckpoint(loaded.checkpoint);
-      if (loaded.error) setNotice(loaded.error);
-    } catch {
-      setNotice("Browser storage unavailable.");
-    }
-  }, []);
-  useEffect(() => {
-    try {
-      localStorage.setItem("sapiens.settings", JSON.stringify(settings));
-    } catch {}
-    if (soundEngine.getMuted() !== settings.muted) soundEngine.toggleMute();
-    document.documentElement.dataset.motion = settings.reducedMotion
-      ? "reduced"
-      : "full";
-  }, [settings]);
-  useEffect(() => {
-    if (screen !== "playing") return;
-    const timer = setInterval(persist, 5000);
-    const hide = () => {
-      if (document.hidden) {
-        setMenu("pause");
-        persist();
+      if (newlyUnlocked.length > 0) {
+        soundEngine.playAchievementFanfare();
+        setToastQueue(prevQ => [...prevQ, ...newlyUnlocked]);
       }
-    };
-    const blur = () => {
-      controls.current = createControls();
-      setSprint(false);
-      setMenu("pause");
-      persist();
-    };
-    window.addEventListener("blur", blur);
-    document.addEventListener("visibilitychange", hide);
-    window.addEventListener("pagehide", persist);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("blur", blur);
-      document.removeEventListener("visibilitychange", hide);
-      window.removeEventListener("pagehide", persist);
-    };
-  }, [screen, persist]);
+      return updatedAchievements;
+    });
+  }, [turnCount]);
+
+  // Keep mutable refs for single-mount World3D callbacks
+  const activeEventRef = useRef<DynamicWorldEvent | null>(null);
+  activeEventRef.current = runStats.activeEvent;
+  const unlockedTechsRef = useRef<string[]>(unlockedTechIds);
+  unlockedTechsRef.current = unlockedTechIds;
+  const pushFeedRef = useRef(pushFeed);
+  pushFeedRef.current = pushFeed;
+  const checkAchievementsRef = useRef(checkAchievements);
+  checkAchievementsRef.current = checkAchievements;
+
+  // Toast Queue Processor
   useEffect(() => {
-    if (screen === "playing" && (menu || s.status !== "playing")) persist();
-  }, [menu, s.status, screen, persist]);
+    if (!activeToast && toastQueue.length > 0) {
+      setActiveToast(toastQueue[0]);
+      setToastQueue(prev => prev.slice(1));
+    }
+  }, [activeToast, toastQueue]);
+
+  // 1. Initialize Three.js 3D Simulator World ONCE on mount
   useEffect(() => {
-    document.body.dataset.state =
-      screen === "title" ? "title" : paused ? "paused" : "playing";
-  }, [screen, paused]);
-  useEffect(() => {
-    if (screen !== "playing" || !mount.current) return;
-    let cancelled = false,
-      frame = 0,
-      instance: World3D | undefined;
-    setWorldReady(false);
-    setWorldError("");
-    import("./game/scene/world3d")
-      .then(({ World3D }) => {
-        if (cancelled || !mount.current) return;
-        instance = new World3D(mount.current, {
-          onPickup: (kind) => {
-            dispatch({ type: "pickup", kind });
-            soundEngine.playGather();
-          },
-          onJump: () => {
-            dispatch({ type: "jump" });
-            soundEngine.playJumpSound();
-          },
-          onSlide: () => {
-            dispatch({ type: "slide" });
-            soundEngine.playSlideSound();
-          },
-          onLaneChange: () => {dispatch({ type: "lane" }); soundEngine.playLaneShift();},
-          onPowerUp: () => soundEngine.playPowerup(),
-          onRespawn: () => {pausedRef.current=true; setMenu(null); setDead(true);soundEngine.playBeastRoar();},
-          onObstacleHit: (shielded) => {
-            dispatch({ type: "hit", shielded });
-            soundEngine.playStumble();
-          },
-          onDilemmaGate: () => {
-            const state = current.current;
-            if (
-              state.tutorialStep === 4 &&
-              HISTORICAL_DILEMMAS.some(
-                (d) => d.era === state.era && !state.decisionIds.includes(d.id),
-              )
-            )
-              setMenu("council");
-          },
-        }, undefined, undefined, {era:current.current.era,landscape:current.current.landscape});
-        world.current = instance;
-        instance.setTitleMode(false);
-        instance.setLandscape(current.current.landscape);
-        instance.setQuality(settings.quality);
-        instance.setReducedMotion(settings.reducedMotion);
-        setWorldReady(true);
-        let last = performance.now(),
-          pending = 0,
-          report = 0,
-          frames = 0;
-        const tick = (now: number) => {
-          const dt = Math.min((now - last) / 1000, 0.05);
-          last = now;
-          if (instance) {
-            instance.setPaused(pausedRef.current);
-            instance.setTutorialMode(current.current.tutorialStep < 4);
-            if (!pausedRef.current) {
-              instance.update(dt, controls.current);
-              pending += dt;
-              frames++;
-              report += dt;
-              if (pending >= 0.1) {
-                dispatch({
-                  type: "tick",
-                  dt: pending,
-                  distance:
-                    distanceOffset.current + instance.getDistanceTraveled(),
-                  snapshot: instance.getRunnerSnapshot(),
-                });
-                pending = 0;
-              }
-              if (report >= 1) {
-                setPerf({
-                  fps: Math.round(frames / report),
-                  drawCalls: instance.renderer.info.render.calls,
-                });
-                report = 0;
-                frames = 0;
-              }
-            }
+    if (!canvasMountRef.current) return;
+
+    const world = new World3D(canvasMountRef.current, {
+      onPromptChange: prompt => {
+        setSimState(prev => ({ ...prev, activePrompt: prompt }));
+      },
+      onCarriedChange: carried => {
+        setSimState(prev => ({ ...prev, carriedCrate: carried }));
+      },
+      onDockCountChange: count => {
+        setSimState(prev => ({ ...prev, dockCratesCount: count }));
+      },
+      onRacksUpdate: updatedRacks => {
+        setRacks(updatedRacks);
+      },
+      onQueueChange: (queueLen, frontCheckout) => {
+        setSimState(prev => ({
+          ...prev,
+          queueLength: queueLen,
+          activeCheckout: frontCheckout,
+        }));
+      },
+      onTradeCompleted: (checkout: SimCheckoutState) => {
+        const reward = calculateTradeReward(checkout.items, activeEventRef.current);
+        setSimState(prev => {
+          const xpRes = applyCampXp(prev.campLevel, prev.campXp, prev.nextLevelXp, reward.xp);
+          if (xpRes.leveledUp) {
+            pushFeedRef.current(`Camp reached Level ${xpRes.level}!`, 'myth');
           }
-          frame = requestAnimationFrame(tick);
-        };
-        frame = requestAnimationFrame(tick);
-      })
-      .catch(() => {
-        if (!cancelled)
-          setWorldError(
-            "The 3D renderer could not start. Enable hardware acceleration or try a WebGL-capable browser. Your checkpoint is safe.",
-          );
+          return {
+            ...prev,
+            shells: prev.shells + reward.shells,
+            campLevel: xpRes.level,
+            campXp: xpRes.xp,
+            nextLevelXp: xpRes.nextLevelXp,
+            tradesCompleted: prev.tradesCompleted + 1,
+            totalShellsEarned: prev.totalShellsEarned + reward.shells,
+          };
+        });
+        pushFeedRef.current(
+          `Traded with ${checkout.customerName} (${checkout.customerTribe}): +${reward.shells} Shells, +${reward.knowledge} Knowledge`,
+          'good'
+        );
+        setRunStats(prev => {
+          const updated = {
+            ...prev,
+            pickupsCollected: prev.pickupsCollected + checkout.totalItems,
+            comboStreak: prev.comboStreak + 1,
+            maxCombo: Math.max(prev.maxCombo, prev.comboStreak + 1),
+            mythSurge: Math.min(100, prev.mythSurge + reward.mythSurgeGain),
+          };
+          setResources(r => {
+            const nextRes = {
+              ...r,
+              knowledge: r.knowledge + reward.knowledge,
+              mythPower: r.mythPower + reward.myth,
+              calories: r.calories + 12,
+              population: Math.min(r.dunbarLimit, r.population + 1),
+            };
+            checkAchievementsRef.current(nextRes, unlockedTechsRef.current, updated);
+            return nextRes;
+          });
+          return updated;
+        });
+      },
+      onCratePickedUp: (productType, units) => {
+        pushFeedRef.current(`Picked up ${SIM_CATALOG[productType].name} crate (${units} units)`, 'good');
+      },
+      onRackStocked: (productType, unitsAdded) => {
+        pushFeedRef.current(`Stocked +${unitsAdded} ${SIM_CATALOG[productType].name} onto rack`, 'good');
+        setRunStats(prev => {
+          const updated = { ...prev, pickupsCollected: prev.pickupsCollected + 1 };
+          setResources(r => {
+            const nextRes = { ...r, calories: r.calories + 10, flintAndStone: r.flintAndStone + 5 };
+            checkAchievementsRef.current(nextRes, unlockedTechsRef.current, updated);
+            return nextRes;
+          });
+          return updated;
+        });
+      },
+      onForageCollected: productType => {
+        setRunStats(prev => ({ ...prev, pickupsCollected: prev.pickupsCollected + 1 }));
+        setResources(r => ({
+          ...r,
+          calories: productType === 'berries' ? r.calories + 25 : r.calories,
+          flintAndStone: productType === 'flint' ? r.flintAndStone + 20 : r.flintAndStone,
+        }));
+      },
+      onRackPlaced: (_x, _z, _rot, productType) => {
+        setSimState(prev => ({ ...prev, placementMode: null }));
+        pushFeedRef.current(`Constructed new ${SIM_CATALOG[productType].name.split(' ')[0]} Rack!`, 'myth');
+      },
+      onOpenTerminal: () => {
+        setIsTerminalOpen(true);
+      },
+      onBump: (_hazardType, bumpNumber, isSecondBump) => {
+        if (isSecondBump) {
+          pushFeedRef.current('2nd hazard hit! Respawning at Central Hearth.', 'warn');
+          setRunStats(prev => ({
+            ...prev,
+            bumpCount: 0,
+            isRespawning: true,
+            stumbles: prev.stumbles + 1,
+          }));
+          if (respawnTimerRef.current) window.clearTimeout(respawnTimerRef.current);
+          respawnTimerRef.current = window.setTimeout(() => {
+            setRunStats(p => ({ ...p, isRespawning: false }));
+          }, 3200);
+        } else {
+          pushFeedRef.current('Wilderness Bump 1/2! Step back from north hazards!', 'warn');
+          setRunStats(prev => ({
+            ...prev,
+            bumpCount: bumpNumber,
+            stumbles: prev.stumbles + 1,
+          }));
+        }
+      },
+      onRespawn: () => {
+        setRunStats(prev => ({ ...prev, bumpCount: 0, isRespawning: true }));
+        if (respawnTimerRef.current) window.clearTimeout(respawnTimerRef.current);
+        respawnTimerRef.current = window.setTimeout(() => {
+          setRunStats(p => ({ ...p, isRespawning: false }));
+        }, 3200);
+      },
+      onFeedMessage: (text, tone) => {
+        pushFeedRef.current(text, tone);
+      },
+      onMythTrigger: amount => {
+        setRunStats(prev => ({
+          ...prev,
+          mythSurge: Math.min(100, prev.mythSurge + amount),
+        }));
+      },
+    });
+
+    worldRef.current = world;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('autostart') === '1') {
+      world.setTitleMode(false);
+      setGameState('playing');
+    }
+
+    let lastTime = performance.now();
+    let animId = 0;
+    const gameTick = () => {
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+      if (worldRef.current) {
+        worldRef.current.update(dt, controlsRef.current);
+      }
+      animId = requestAnimationFrame(gameTick);
+    };
+    animId = requestAnimationFrame(gameTick);
+
+    return () => {
+      cancelAnimationFrame(animId);
+      if (respawnTimerRef.current) window.clearTimeout(respawnTimerRef.current);
+      world.dispose();
+      worldRef.current = null;
+    };
+  }, []);
+
+  // Trigger Myth Surge manually or on myth increases
+  const handleTriggerMythSurge = useCallback(() => {
+    worldRef.current?.triggerMythSurge(30, 1.8);
+    soundEngine.playAchievementFanfare();
+    pushFeed('Shared Myth Surge ignited! Band unity & knowledge boosted.', 'myth');
+    setResources(r => ({
+      ...r,
+      mythPower: r.mythPower + 30,
+      knowledge: r.knowledge + 12,
+      dunbarLimit: r.dunbarLimit + 15,
+    }));
+  }, [pushFeed]);
+
+  // Trigger Location-Specific Dynamic Environmental Event
+  const handleTriggerSeasonEvent = useCallback(() => {
+    const events = getLandscapeEvents(landscape);
+    if (!events || events.length === 0) return;
+
+    const eventIndex = eventCycleIndexRef.current % events.length;
+    eventCycleIndexRef.current += 1;
+
+    const chosenEvent: DynamicWorldEvent = {
+      ...events[eventIndex],
+      active: true,
+      remainingTime: events[eventIndex].duration,
+    };
+
+    setRunStats(prev => ({ ...prev, activeEvent: chosenEvent }));
+    pushFeed(`World Event: ${chosenEvent.title}`, 'myth');
+
+    if (worldRef.current) {
+      worldRef.current.setEventWeather(chosenEvent.weatherStyle, true);
+      if (chosenEvent.animalMigration) {
+        worldRef.current.triggerAnimalMigration(chosenEvent.animalMigration, true);
+      } else {
+        worldRef.current.triggerAnimalMigration('gazelles', false);
+      }
+    }
+  }, [landscape, pushFeed]);
+
+  // Periodic Automatic Environmental Event
+  useEffect(() => {
+    if (gameState !== 'playing' || runStats.activeEvent?.active) return;
+    const autoTimer = window.setTimeout(() => {
+      handleTriggerSeasonEvent();
+    }, 22000);
+    return () => window.clearTimeout(autoTimer);
+  }, [gameState, runStats.activeEvent?.active, handleTriggerSeasonEvent]);
+
+  // Event Countdown
+  useEffect(() => {
+    if (!runStats.activeEvent || !runStats.activeEvent.active) return;
+    const timer = setInterval(() => {
+      setRunStats(prev => {
+        if (!prev.activeEvent || !prev.activeEvent.active) return prev;
+        const nextRem = prev.activeEvent.remainingTime - 1;
+        if (nextRem <= 0) {
+          worldRef.current?.setEventWeather('clear_sun', false);
+          worldRef.current?.triggerAnimalMigration('gazelles', false);
+          return { ...prev, activeEvent: null };
+        }
+        return { ...prev, activeEvent: { ...prev.activeEvent, remainingTime: nextRem } };
       });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-      instance?.dispose();
-      world.current = null;
-    };
-  }, [epoch, screen]);
-  useEffect(() => {
-    soundEngine.setMusic(!paused && !settings.muted, s.era);
-    return () => soundEngine.stopMusic();
-  }, [paused, settings.muted, s.era]);
-  useEffect(() => {
-    if(!dead)return;
-    const timer=setTimeout(()=>{
-      distanceOffset.current=0;controls.current=createControls();
-      dispatch({type:"respawn"});setEpoch(v=>v+1);setDead(false);soundEngine.playRespawn();
-    },1800);
-    return ()=>clearTimeout(timer);
-  },[dead]);
-  useLayoutEffect(() => {
-    world.current?.setPaused(paused);
-    if (paused) {
-      controls.current = createControls();
-      setSprint(false);
-    }
-  }, [paused]);
-  useEffect(() => {
-    world.current?.setQuality(settings.quality);
-    world.current?.setReducedMotion(settings.reducedMotion);
-  }, [settings, worldReady]);
-  useEffect(() => {
-    world.current?.setLandscape(s.landscape);
-  }, [s.landscape, worldReady]);
-  const act = useCallback((action: string) => {
-    if (pausedRef.current) return;
-    if (action === "left") world.current?.shiftLane(-1);
-    if (action === "right") world.current?.shiftLane(1);
-    if (action === "jump") world.current?.triggerJump();
-    if (action === "slide") world.current?.triggerSlide();
-    if (action === "sprint") {
-      controls.current.sprint = !controls.current.sprint;
-      setSprint(!!controls.current.sprint);
-    }
-  }, []);
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (
-        (e.target as HTMLElement)?.closest(
-          'input,textarea,select,[contenteditable="true"]',
-        )
-      )
-        return;
-      const key = e.key.toLowerCase();
-      if (
-        (key === "enter" || key === " ") &&
-        (e.target as HTMLElement)?.closest("button,a")
-      )
-        return;
-      if (
-        [" ", "arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)
-      )
-        e.preventDefault();
-      if (e.repeat) return;
-      if (screen === "title") {
-        if (key === "enter") start(newCampaign(s.era, s.landscape), true);
-        return;
-      }
-      if (key === "escape" || key === "p") {
-        if (!intro) setMenu((m) => (m ? null : "pause"));
-        return;
-      }
-      if (pausedRef.current) return;
-      const action = (
-        {
-          a: "left",
-          arrowleft: "left",
-          d: "right",
-          arrowright: "right",
-          w: "jump",
-          arrowup: "jump",
-          " ": "jump",
-          s: "slide",
-          c: "slide",
-          arrowdown: "slide",
-        } as Record<string, string>
-      )[key];
-      if (action) act(action);
-      if (key === "shift") {
-        controls.current.sprint = true;
-        setSprint(true);
-      }
-      if (key === "m") setSettings((v) => ({ ...v, muted: !v.muted }));
-      const panel = (
-        { t: "research", x: "journal", v: "ai" } as Record<string, string>
-      )[key];
-      if (panel) setMenu(panel);
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.key === "Shift") {
-        controls.current.sprint = false;
-        setSprint(false);
-      }
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-  }, [screen, s.era, s.landscape, intro, act]);
-  function start(value: Campaign, showIntro = false) {
-    dispatch({ type: "restore", value });
-    distanceOffset.current = value.stats.distanceTraveled;
-    setMenu(null);
-    setIntro(showIntro);
-    setEpoch((v) => v + 1);
-    setScreen("playing");
-    setNotice("");
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [runStats.activeEvent?.active]);
+
+  // Start Game from Title
+  const startGame = useCallback((startingEra: HistoricalEra, startingLandscape: SapiensLandscape = 'river_meadow') => {
     soundEngine.playDrum();
-  }
-  function newRun() {
-    if (checkpoint && checkpoint.campaign.status === "playing")
-      setMenu("new-confirm");
-    else start(newCampaign(s.era, s.landscape), true);
-  }
-  const decision = HISTORICAL_DILEMMAS.find(
-    (d) => d.era === s.era && !s.decisionIds.includes(d.id),
-  );
+    setEra(startingEra);
+    setLandscape(startingLandscape);
+    if (worldRef.current) {
+      worldRef.current.setTitleMode(false);
+      worldRef.current.setLandscape(startingLandscape);
+    }
+    setGameState('playing');
+  }, []);
+
+  // Keyboard Controls
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      const key = e.key.toLowerCase();
+
+      if (gameState === 'title') {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          startGame(era, landscape);
+        }
+        return;
+      }
+
+      if (gameState === 'playing') {
+        if (e.key === 'Tab' || key === 'b') {
+          e.preventDefault();
+          setIsTerminalOpen(prev => !prev);
+          return;
+        }
+
+        if (key === 'escape') {
+          if (simState.placementMode) {
+            worldRef.current?.cancelPlacementMode();
+            setSimState(prev => ({ ...prev, placementMode: null }));
+            return;
+          }
+          if (isTerminalOpen || isTechTreeOpen || isCodexOpen || isAchievementsOpen || activeDilemma) {
+            setIsTerminalOpen(false);
+            setIsTechTreeOpen(false);
+            setIsCodexOpen(false);
+            setIsAchievementsOpen(false);
+            setActiveDilemma(null);
+            return;
+          }
+          setGameState('paused');
+          return;
+        }
+
+        // Disable movement keys when modal is open
+        if (isTerminalOpen || isTechTreeOpen || isCodexOpen || isAchievementsOpen || activeDilemma) {
+          return;
+        }
+
+        if (e.key === 'Shift') controlsRef.current.sprint = true;
+        if (key === 'w' || e.key === 'ArrowUp') controlsRef.current.forward = true;
+        if (key === 's' || e.key === 'ArrowDown') controlsRef.current.backward = true;
+        if (key === 'a' || e.key === 'ArrowLeft') controlsRef.current.left = true;
+        if (key === 'd' || e.key === 'ArrowRight') controlsRef.current.right = true;
+        if (key === 'q') controlsRef.current.turnLeft = true;
+        if (key === 'z') controlsRef.current.turnRight = true;
+        if (e.key === ' ') {
+          e.preventDefault();
+          controlsRef.current.jump = true;
+        }
+        if (key === 'e') worldRef.current?.triggerInteract();
+        if (key === 'r') worldRef.current?.rotatePlacement();
+        if (key === 'v') {
+          worldRef.current?.toggleCameraView();
+          setFirstPerson(prev => !prev);
+        }
+        if (key === 'f') handleTriggerMythSurge();
+        if (key === 'g') handleTriggerSeasonEvent();
+        if (key === 'm') setIsMuted(soundEngine.toggleMute());
+        if (key === 'x') setIsCodexOpen(prev => !prev);
+        if (key === 't') setIsTechTreeOpen(prev => !prev);
+        if (key === 'j') setIsAchievementsOpen(prev => !prev);
+        if (key === 'p') setGameState('paused');
+      } else if (gameState === 'paused' && (key === 'escape' || key === 'p')) {
+        setGameState('playing');
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      if (e.key === 'Shift') controlsRef.current.sprint = false;
+      if (key === 'w' || e.key === 'ArrowUp') controlsRef.current.forward = false;
+      if (key === 's' || e.key === 'ArrowDown') controlsRef.current.backward = false;
+      if (key === 'a' || e.key === 'ArrowLeft') controlsRef.current.left = false;
+      if (key === 'd' || e.key === 'ArrowRight') controlsRef.current.right = false;
+      if (key === 'q') controlsRef.current.turnLeft = false;
+      if (key === 'z') controlsRef.current.turnRight = false;
+      if (e.key === ' ') controlsRef.current.jump = false;
+    };
+
+    const handleBlur = () => {
+      controlsRef.current = {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        sprint: false,
+        jump: false,
+        turnLeft: false,
+        turnRight: false,
+      };
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [
+    gameState,
+    era,
+    landscape,
+    simState.placementMode,
+    isTerminalOpen,
+    isTechTreeOpen,
+    isCodexOpen,
+    isAchievementsOpen,
+    activeDilemma,
+    startGame,
+    handleTriggerMythSurge,
+    handleTriggerSeasonEvent,
+  ]);
+
+  // Simulator Terminal Handlers
+  const handleOrderCrate = (productType: SimProductType, qty: number) => {
+    const cost = calculateOrderCost(productType, qty);
+    if (simState.shells < cost) return;
+    soundEngine.playGather();
+    setSimState(prev => ({ ...prev, shells: prev.shells - cost }));
+    for (let i = 0; i < qty; i++) {
+      worldRef.current?.spawnDockCrate(productType, SIM_CATALOG[productType].crateUnits);
+    }
+    pushFeed(`Ordered ${qty}x ${SIM_CATALOG[productType].name} crate to Riverbank Dock (-${cost} Shells)`, 'good');
+  };
+
+  const handleAdjustPrice = (productType: SimProductType, delta: number) => {
+    setSimState(prev => {
+      const nextPrice = Math.max(2, prev.prices[productType] + delta);
+      const nextPrices = { ...prev.prices, [productType]: nextPrice };
+      worldRef.current?.setPrices(nextPrices);
+      return { ...prev, prices: nextPrices };
+    });
+  };
+
+  const handleBuyRack = (productType: SimProductType) => {
+    if (simState.shells < SIM_RACK_COST) return;
+    soundEngine.playDrum();
+    setSimState(prev => ({
+      ...prev,
+      shells: prev.shells - SIM_RACK_COST,
+      placementMode: { rackCost: SIM_RACK_COST, productType },
+    }));
+    worldRef.current?.enterPlacementMode(productType, SIM_RACK_COST);
+    setIsTerminalOpen(false);
+    pushFeed('Walk to a clear camp spot and press [E] to place rack ([R] rotate).', 'myth');
+  };
+
+  const handleExpandCamp = (tier: number) => {
+    const info = SIM_EXPANSIONS.find(e => e.tier === tier);
+    if (!info || simState.shells < info.cost) return;
+    soundEngine.playDiscovery();
+    worldRef.current?.setExpansionTier(tier);
+    worldRef.current?.triggerMythSurge(20, 1.5);
+    setSimState(prev => ({
+      ...prev,
+      shells: prev.shells - info.cost,
+      expansionTier: tier,
+    }));
+    pushFeed(`Expanded settlement to ${info.name}!`, 'myth');
+  };
+
+  const handleHireStaff = (role: 'restocker' | 'barterer') => {
+    const staff = SIM_STAFF_OPTIONS.find(s => s.role === role);
+    if (!staff || simState.shells < staff.cost) return;
+    soundEngine.playDiscovery();
+    worldRef.current?.hireStaff(role);
+    setSimState(prev => ({
+      ...prev,
+      shells: prev.shells - staff.cost,
+      restockerHired: role === 'restocker' ? true : prev.restockerHired,
+      bartererHired: role === 'barterer' ? true : prev.bartererHired,
+    }));
+    pushFeed(`Hired ${staff.name}!`, 'myth');
+  };
+
+  // Landscape Switcher
+  const handleSelectLandscape = (newLandscape: SapiensLandscape) => {
+    soundEngine.playMythSound();
+    setLandscape(newLandscape);
+    if (worldRef.current) {
+      worldRef.current.setLandscape(newLandscape);
+      worldRef.current.setEventWeather('clear_sun', false);
+      worldRef.current.triggerAnimalMigration('gazelles', false);
+    }
+    setRunStats(prev => ({ ...prev, landscape: newLandscape, activeEvent: null }));
+  };
+
+  // Advance Season / Turn
+  const advanceSeason = useCallback(() => {
+    soundEngine.playStep();
+    setResources(prevRes => {
+      const consumption = calculateTurnConsumption(prevRes);
+      const newRes: GameResources = {
+        ...prevRes,
+        calories: consumption.newCalories,
+        population: Math.max(0, prevRes.population + consumption.populationDelta),
+        knowledge: prevRes.knowledge + 3,
+        mythPower: Math.max(0, prevRes.mythPower - 1),
+      };
+      if (checkDefeatCondition(newRes)) {
+        setGameState('gameover');
+      }
+      checkAchievements(newRes, unlockedTechIds, runStats);
+      return newRes;
+    });
+
+    setTurnCount(prev => prev + 1);
+    setSimState(prev => ({ ...prev, dayNumber: prev.dayNumber + 1 }));
+
+    if (turnCount % 3 === 0 && !activeDilemma) {
+      const availableDilemmas = HISTORICAL_DILEMMAS.filter(d => d.era === era);
+      if (availableDilemmas.length > 0) {
+        const randDilemma = availableDilemmas[Math.floor(Math.random() * availableDilemmas.length)];
+        setActiveDilemma(randDilemma);
+        soundEngine.playDrum();
+      }
+    }
+  }, [turnCount, era, activeDilemma, unlockedTechIds, runStats, checkAchievements]);
+
+  // Select Dilemma Choice
+  const handleSelectChoice = (choice: DilemmaChoice) => {
+    soundEngine.playDrum();
+    const updated = applyDilemmaEffects(resources, choice.effects);
+    setResources(updated);
+    if ((choice.effects.mythPower || 0) > 0) {
+      worldRef.current?.triggerMythSurge(18, 1.4);
+    }
+
+    let nextUnlocked = unlockedTechIds;
+    if (choice.unlockTechId && !unlockedTechIds.includes(choice.unlockTechId)) {
+      nextUnlocked = [...unlockedTechIds, choice.unlockTechId];
+      setUnlockedTechIds(nextUnlocked);
+      setTechs(prev => prev.map(t => (t.id === choice.unlockTechId ? { ...t, unlocked: true } : t)));
+    }
+
+    checkAchievements(updated, nextUnlocked, runStats);
+    setActiveDilemma(null);
+
+    if (checkVictoryCondition(nextUnlocked, updated)) {
+      soundEngine.playVictory();
+      setGameState('victory');
+    }
+  };
+
+  // Unlock Technology
+  const handleUnlockTech = (tech: DiscoveryTech) => {
+    soundEngine.playDiscovery();
+    const afterDeduct = deductTechCost(tech, resources);
+    setResources(afterDeduct);
+    worldRef.current?.triggerMythSurge(22, 1.5);
+
+    const newUnlocked = [...unlockedTechIds, tech.id];
+    setUnlockedTechIds(newUnlocked);
+    setTechs(prev => prev.map(t => (t.id === tech.id ? { ...t, unlocked: true } : t)));
+    checkAchievements(afterDeduct, newUnlocked, runStats);
+
+    if (tech.id === 'emmer_cultivation' && era === 'cognitive') setEra('agricultural');
+    if (tech.id === 'scientific_method' && era !== 'scientific') setEra('scientific');
+
+    if (checkVictoryCondition(newUnlocked, afterDeduct)) {
+      soundEngine.playVictory();
+      setGameState('victory');
+    }
+  };
+
+  // Active Quest Completion Evaluation
+  const activeQuest = quests.find(q => !q.completed) || null;
+  useEffect(() => {
+    if (!activeQuest) return;
+    if (activeQuest.checkCompletion(resources, unlockedTechIds)) {
+      soundEngine.playMythSound();
+      worldRef.current?.triggerMythSurge(25, 1.6);
+      setQuests(prev => prev.map(q => (q.id === activeQuest.id ? { ...q, completed: true } : q)));
+    }
+  }, [resources, unlockedTechIds, activeQuest]);
+
+  const handleRestart = () => {
+    setResources(INITIAL_RESOURCES);
+    setSimState(INITIAL_SIM_STATE);
+    setTurnCount(1);
+    setQuests(INITIAL_QUESTS);
+    setTechs(DISCOVERY_TECHS);
+    setUnlockedTechIds(['tree_of_knowledge']);
+    setActiveDilemma(null);
+    setIsTechTreeOpen(false);
+    setIsCodexOpen(false);
+    setIsTerminalOpen(false);
+    if (worldRef.current) {
+      worldRef.current.setTitleMode(false);
+    }
+    setGameState('playing');
+  };
+
+  const handleReturnToTitle = () => {
+    setResources(INITIAL_RESOURCES);
+    setTurnCount(1);
+    if (worldRef.current) {
+      worldRef.current.setTitleMode(true);
+    }
+    setGameState('title');
+  };
+
   return (
-    <main className="game-app">
-      {screen === "playing" && <div ref={mount} className="world-mount" />}
-      {screen === "title" && (
+    <main className="relative w-screen h-screen overflow-hidden bg-stone-950 text-stone-100 select-none">
+      {/* Isolated Three.js WebGL Container */}
+      <div
+        ref={canvasMountRef}
+        className="absolute inset-0 z-0 w-full h-full"
+        style={{ pointerEvents: 'auto' }}
+      />
+
+      {gameState === 'title' && (
         <TitleScreen
-          era={s.era}
-          landscape={s.landscape}
-          onEra={(era) =>
-            dispatch({ type: "restore", value: newCampaign(era, s.landscape) })
-          }
-          onLandscape={(landscape) =>
-            dispatch({ type: "landscape", value: landscape })
-          }
-          onStart={newRun}
-          onContinue={checkpoint ? () => start(checkpoint.campaign) : undefined}
-          saveLabel={
-            checkpoint
-              ? new Date(checkpoint.savedAt).toLocaleString()
-              : undefined
-          }
-          onSettings={() => setMenu("settings")}
+          onStartGame={startGame}
+          selectedEra={era}
+          onSelectEra={setEra}
+          selectedLandscape={landscape}
+          onSelectLandscape={setLandscape}
         />
       )}
-      {screen === "playing" && (
-        <PlayHUD
-          s={s}
-          onMenu={setMenu}
-          onAction={act}
-          onSkip={() => dispatch({ type: "skipTutorial" })}
-          sprint={sprint}
+
+      {gameState === 'playing' && (
+        <HUD
+          resources={resources}
+          era={era}
+          activeQuest={activeQuest}
+          runStats={runStats}
+          simState={simState}
+          currentLandscape={landscape}
+          firstPerson={firstPerson}
+          onSelectLandscape={handleSelectLandscape}
+          onToggleCampOpen={() => {
+            setSimState(prev => {
+              const nextOpen = !prev.isCampOpen;
+              worldRef.current?.setCampOpen(nextOpen);
+              return { ...prev, isCampOpen: nextOpen };
+            });
+          }}
+          onOpenTerminal={() => setIsTerminalOpen(true)}
+          onToggleCameraView={() => {
+            worldRef.current?.toggleCameraView();
+            setFirstPerson(prev => !prev);
+          }}
+          onTriggerInteract={() => worldRef.current?.triggerInteract()}
+          onRotatePlacement={() => worldRef.current?.rotatePlacement()}
+          onCancelPlacement={() => {
+            worldRef.current?.cancelPlacementMode();
+            setSimState(prev => ({ ...prev, placementMode: null }));
+          }}
+          onTriggerMythSurge={handleTriggerMythSurge}
+          onTriggerSeasonEvent={handleTriggerSeasonEvent}
+          onOpenDilemmas={() => {
+            const available = HISTORICAL_DILEMMAS.filter(d => d.era === era);
+            setActiveDilemma(available[0] || HISTORICAL_DILEMMAS[0]);
+          }}
+          onOpenTechTree={() => setIsTechTreeOpen(true)}
+          onOpenCodex={() => setIsCodexOpen(true)}
+          onOpenAchievements={() => setIsAchievementsOpen(true)}
+          unlockedAchievementsCount={achievements.filter(a => a.unlocked).length}
+          onToggleMute={() => setIsMuted(soundEngine.toggleMute())}
+          isMuted={isMuted}
+          onPause={() => setGameState('paused')}
+          onEndTurn={advanceSeason}
+          turnCount={turnCount}
         />
       )}
-      {notice && (
-        <div className="save-notice" role="status">
-          {notice}
-        </div>
+
+      <AchievementToast
+        achievement={activeToast}
+        onDismiss={() => setActiveToast(null)}
+      />
+
+      {isTerminalOpen && (
+        <CampTerminalModal
+          simState={simState}
+          racks={racks}
+          onOrderCrate={handleOrderCrate}
+          onAdjustPrice={handleAdjustPrice}
+          onBuyRack={handleBuyRack}
+          onExpandCamp={handleExpandCamp}
+          onHireStaff={handleHireStaff}
+          onClose={() => setIsTerminalOpen(false)}
+        />
       )}
-      {screen === "playing" && !worldReady && !worldError && (
-        <div className="loading-world" role="status">
-          Preparing the trail…
-        </div>
+
+      {isAchievementsOpen && (
+        <AchievementsModal
+          achievements={achievements}
+          onClose={() => setIsAchievementsOpen(false)}
+        />
       )}
-      {worldError && (
-        <Dialog title="Unable to start 3D">
-          <p>{worldError}</p>
-          <button
-            onClick={() => {
-              setWorldError("");
-              setScreen("title");
-            }}
-          >
-            Return to title
-          </button>
-        </Dialog>
+
+      {activeDilemma && (
+        <DilemmaModal
+          dilemma={activeDilemma}
+          onSelectChoice={handleSelectChoice}
+          onClose={() => setActiveDilemma(null)}
+        />
       )}
-      {intro && worldReady && (
-        <Dialog title={CHAPTERS[s.era].title}>
-          <div
-            className="intro-art"
-            style={{ backgroundImage: `url(${LANDSCAPE_ART[s.landscape]})` }}
-          />
-          <p className="lead">Every journey begins with a choice.</p>
-          <p>
-            Gather supplies, make two council decisions and research your
-            chapter’s discovery. Keep the band fed for five active minutes.
-            Seasons pass every minute; reading and pausing stop the clock.
-          </p>
-          <p>
-            Keyboard: A/D move, Space jump, S slide. Touch: swipe or use the
-            buttons.
-          </p>
-          <button className="primary" onClick={() => setIntro(false)}>
-            Enter the trail / Skip intro
-          </button>
-        </Dialog>
+
+      {isTechTreeOpen && (
+        <TechTreeModal
+          techs={techs}
+          resources={resources}
+          onUnlockTech={handleUnlockTech}
+          onClose={() => setIsTechTreeOpen(false)}
+        />
       )}
-      {menu === "new-confirm" && (
-        <Dialog title="Start a new chapter?" onClose={closeMenu}>
-          <p>This replaces the saved checkpoint when the new chapter saves.</p>
-          <button
-            className="primary"
-            onClick={() => start(newCampaign(s.era, s.landscape), true)}
-          >
-            Start new chapter
-          </button>
-        </Dialog>
+
+      {isCodexOpen && (
+        <HarariCodexModal
+          entries={CODEX_ENTRIES}
+          onClose={() => setIsCodexOpen(false)}
+        />
       )}
-      {menu === "pause" && (
-        <Dialog title="Game paused" onClose={closeMenu}>
-          <p>Take a breath. The trail can wait.</p>
-          <div className="button-stack">
-            <button className="primary" onClick={closeMenu}>
-              Resume
-            </button>
-            <button onClick={persist}>Save checkpoint</button>
-            <button onClick={() => setMenu("settings")}>Settings</button>
-            <button onClick={() => setMenu("restart-confirm")}>
-              Restart chapter
-            </button>
-            <button
-              onClick={() => {
-                persist();
-                setMenu(null);
-                setScreen("title");
-              }}
-            >
-              Save and return to title
-            </button>
-          </div>
-        </Dialog>
+
+      {gameState === 'victory' && (
+        <VictoryModal
+          resources={resources}
+          turnCount={turnCount}
+          onRestart={handleRestart}
+        />
       )}
-      {menu === "restart-confirm" && (
-        <Dialog title="Restart this chapter?" onClose={() => setMenu("pause")}>
-          <p>Your current chapter progress will be replaced.</p>
-          <button onClick={() => start(newCampaign(s.era, s.landscape), true)}>
-            Restart chapter
-          </button>
-        </Dialog>
+
+      {gameState === 'gameover' && (
+        <GameOverModal
+          resources={resources}
+          turnCount={turnCount}
+          onRestart={handleRestart}
+        />
       )}
-      {menu === "settings" && (
-        <Dialog title="Settings" onClose={closeMenu}>
-          <div className="settings-form">
-            <label>
-              Graphics quality
-              <select
-                value={settings.quality}
-                onChange={(e) =>
-                  setSettings((v) => ({
-                    ...v,
-                    quality: e.target.value as Settings["quality"],
-                  }))
-                }
-              >
-                <option value="low">Low — fewer details, no shadows</option>
-                <option value="high">High — full scenery and shadows</option>
-              </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={settings.reducedMotion}
-                onChange={(e) =>
-                  setSettings((v) => ({
-                    ...v,
-                    reducedMotion: e.target.checked,
-                  }))
-                }
-              />{" "}
-              Reduced motion
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={settings.muted}
-                onChange={(e) =>
-                  setSettings((v) => ({ ...v, muted: e.target.checked }))
-                }
-              />{" "}
-              Mute audio
-            </label>
-            {screen === "playing" && (
-              <>
-                <label>
-                  Landscape
-                  <select
-                    value={s.landscape}
-                    onChange={(e) =>
-                      dispatch({
-                        type: "landscape",
-                        value: e.target.value as Campaign["landscape"],
-                      })
-                    }
-                  >
-                    {LANDSCAPES.map((l) => (
-                      <option key={l} value={l}>
-                        {LANDSCAPE_NAMES[l]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p>
-                  Measured update rate: {perf.fps} FPS · {perf.drawCalls} draw
-                  calls. New scenery adopts the selected landscape as you
-                  travel.
-                </p>
-              </>
-            )}
-          </div>
-        </Dialog>
-      )}
-      {menu === "council" && (
-        <Dialog title="The council" onClose={closeMenu}>
-          {decision ? (
-            <>
-              <h3>{decision.title}</h3>
-              <p>{decision.historicalContext}</p>
-              <small>
-                Historical fiction: these choices simplify complex and debated
-                developments.
-              </small>
-              <div className="decision-grid">
-                {decision.choices.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => {
-                      dispatch({
-                        type: "decision",
-                        id: decision.id,
-                        choice: c.id,
-                      });
-                      setMenu(null);
-                      soundEngine.playDrum();
-                    }}
-                  >
-                    <strong>{c.label}</strong>
-                    <p>{c.description}</p>
-                    <small>
-                      {Object.entries(c.effects)
-                        .map(([k, v]) => `${k}: ${v! > 0 ? "+" : ""}${v}`)
-                        .join(" · ")}
-                    </small>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <p>
-              All decisions for this chapter are resolved. Their effects apply
-              only once.
-            </p>
-          )}
-        </Dialog>
-      )}
-      {menu === "research" && (
-        <Dialog title="Discoveries" onClose={closeMenu}>
-          <p>
-            Knowledge {s.resources.knowledge} · Belief {s.resources.mythPower} ·
-            Flint {s.resources.flintAndStone}
-          </p>
-          <div className="research-grid">
-            {DISCOVERY_TECHS.filter((t) => t.era === s.era).map((t) => (
-              <article key={t.id}>
-                <h3>{t.name}</h3>
-                <p>{t.description}</p>
-                <small>
-                  Cost: {t.cost.knowledge} knowledge · {t.cost.mythPower ?? 0}{" "}
-                  belief · {t.cost.flintAndStone ?? 0} flint
-                </small>
-                <button
-                  disabled={
-                    s.techIds.includes(t.id) || !canUnlockTech(t, s.resources)
-                  }
-                  onClick={() => {
-                    dispatch({ type: "research", id: t.id });
-                    soundEngine.playDiscovery();
-                  }}
-                >
-                  {s.techIds.includes(t.id) ? "Discovered" : "Research"}
-                </button>
-              </article>
-            ))}
-          </div>
-        </Dialog>
-      )}
-      {dead && <div className="death-overlay" role="alert"><span className="eyebrow">Two impacts</span><h2>Your journey falters</h2><p>Returning to the starting point…</p><small>Your discoveries and chapter progress stay with you.</small></div>}
-      {menu === "journal" && (
-        <Dialog title="Journey journal" onClose={closeMenu}>
-          <StoryQuest key={s.era} s={s} onDiscover={()=>{dispatch({type:"insight",id:s.era});soundEngine.playDiscovery();}} onGo={setMenu}/>
-          <h3>Chapter progress</h3>
-          {objectives(s).map((o) => (
-            <p key={o.label}>
-              {o.done ? "✓" : "○"} {o.label}: {o.progress}
-            </p>
-          ))}
-          <h3>Achievements</h3>
-          {INITIAL_ACHIEVEMENTS.filter((a) =>
-            s.achievementIds.includes(a.id),
-          ).map((a) => (
-            <p key={a.id}>
-              ✓ {a.title} — {a.description}
-            </p>
-          ))}
-          {!s.achievementIds.length && (
-            <p>Your discoveries will appear here.</p>
-          )}
-          <h3>History and interpretation</h3>
-          <p>
-            Human cooperation, farming and science emerged through varied
-            developments across places and periods. The game’s era labels,
-            resource values and fixed social thresholds are abstractions, not
-            established universal laws. It draws inspiration from ideas
-            popularized in Sapiens; it does not reproduce the book or imply
-            endorsement.
-          </p>
-          <a
-            href="https://humanorigins.si.edu/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Explore the Smithsonian Human Origins resources
-          </a>
-        </Dialog>
-      )}
-      {menu === "ai" && (
-        <Suspense
-          fallback={
-            <Dialog title="Loading AI studio" onClose={closeMenu}>
-              <p>Loading optional tools…</p>
-            </Dialog>
-          }
-        >
-          <AIStudio era={s.era} onClose={closeMenu} />
-        </Suspense>
-      )}
-      {screen === "playing" && s.status !== "playing" && !menu && !intro && (
-        <Dialog
-          title={
-            s.status === "victory"
-              ? "Chapter complete"
-              : "The band needs a new beginning"
-          }
-        >
-          <p>
-            {s.status === "victory"
-              ? `You completed ${CHAPTERS[s.era].title}. Your band gathered, learned and made its choices.`
-              : "Food ran out and the band could not sustain itself. Gather berries and amber, then watch food consumption each season."}
-          </p>
-          <p>
-            {Math.floor(s.elapsed / 60)} minutes · {s.stats.pickupsCollected}{" "}
-            supplies · {s.stats.score.toLocaleString()} points
-          </p>
-          {s.status === "victory" && CHAPTERS[s.era].next && (
-            <button
-              className="primary"
-              onClick={() => {
-                const next = newCampaign(CHAPTERS[s.era].next!, s.landscape);
-                next.achievementIds = s.achievementIds;
-                start(next, true);
-              }}
-            >
-              Continue to next era
-            </button>
-          )}
-          <button onClick={() => start(newCampaign(s.era, s.landscape), true)}>
-            Replay chapter
-          </button>
-          <button
-            onClick={() => {
-              persist();
-              setScreen("title");
-            }}
-          >
-            Return to title
-          </button>
-        </Dialog>
+
+      {gameState === 'paused' && (
+        <PauseModal
+          onResume={() => setGameState('playing')}
+          onRestart={handleRestart}
+          onTitle={handleReturnToTitle}
+          onToggleMute={() => setIsMuted(soundEngine.toggleMute())}
+          isMuted={isMuted}
+        />
       )}
     </main>
   );

@@ -13,6 +13,9 @@ import {
   RunStats,
   SapiensLandscape,
   DynamicWorldEvent,
+  SimCatalogItem,
+  SimProductType,
+  SimStaffMember,
 } from '../types/game';
 
 export const INITIAL_RESOURCES: GameResources = {
@@ -1118,6 +1121,179 @@ export function applyEventResourcePerks(
     knowledge: Math.round(baseGains.knowledge * (event.perkMultiplier.knowledge || 1.0)),
     amberMultiplier: baseGains.amberMultiplier * (event.perkMultiplier.amber || 1.0),
   };
+}
+
+// --- SAPIENS SETTLEMENT SIMULATOR RULES (Supermarket-Simulator Style) ---
+
+export const SIM_CATALOG: Record<SimProductType, SimCatalogItem> = {
+  berries: {
+    id: 'berries',
+    name: 'Wild Berries & Roots',
+    eraLabel: 'Forager Crate',
+    harariMeaning: 'Diverse Paleolithic diet of nuts, wild figs, and tubers requiring rich botanical knowledge.',
+    crateCost: 24,
+    crateUnits: 6,
+    baseBarterPrice: 8,
+    knowledgePerSale: 2,
+    mythPerSale: 1,
+    colorHex: '#d94848',
+    icon: '🫐',
+  },
+  flint: {
+    id: 'flint',
+    name: 'Knapped Flint Blades',
+    eraLabel: 'Toolmaker Crate',
+    harariMeaning: 'Obsidian & flint traded across 300km tribal networks — proof of early inter-band cooperation.',
+    crateCost: 42,
+    crateUnits: 6,
+    baseBarterPrice: 14,
+    knowledgePerSale: 4,
+    mythPerSale: 2,
+    colorHex: '#6b7280',
+    icon: '🪨',
+  },
+  wheat: {
+    id: 'wheat',
+    name: 'Emmer Wheat Sacks',
+    eraLabel: 'Neolithic Grain',
+    harariMeaning: 'Chapter 5: Wheat domesticated Homo sapiens, tying bands to granaries and barter ledgers.',
+    crateCost: 56,
+    crateUnits: 8,
+    baseBarterPrice: 15,
+    knowledgePerSale: 5,
+    mythPerSale: 3,
+    colorHex: '#eab308',
+    icon: '🌾',
+  },
+  ivory: {
+    id: 'ivory',
+    name: 'Lion-Man Ivory Totems',
+    eraLabel: 'Sacred Relic',
+    harariMeaning: 'Chapter 2: Abstract figurines bind thousands of strangers under a shared imagined order.',
+    crateCost: 90,
+    crateUnits: 4,
+    baseBarterPrice: 36,
+    knowledgePerSale: 8,
+    mythPerSale: 10,
+    colorHex: '#f59e0b',
+    icon: '🦁',
+  },
+};
+
+export const SIM_RACK_COST = 65;
+
+export const SIM_EXPANSIONS = [
+  { tier: 1, name: 'Riverbank Clearing', maxRacks: 4, cost: 0, radius: 13 },
+  { tier: 2, name: 'Neolithic Outpost', maxRacks: 7, cost: 160, radius: 17 },
+  { tier: 3, name: 'Grand Sapiens Bazaar', maxRacks: 12, cost: 340, radius: 22 },
+];
+
+export const SIM_STAFF_OPTIONS: SimStaffMember[] = [
+  {
+    id: 'staff_restocker',
+    role: 'restocker',
+    name: 'Band Gatherer & Restocker',
+    cost: 140,
+    hired: false,
+    description: 'Automatically carries delivered crates from the Riverbank Dock and refills camp racks.',
+  },
+  {
+    id: 'staff_barterer',
+    role: 'barterer',
+    name: 'Sumerian Barter Scribe',
+    cost: 210,
+    hired: false,
+    description: 'Automatically tallies shells & completes trades when tribespeople reach the Barter Counter.',
+  },
+];
+
+export function calculateOrderCost(productType: SimProductType, qty: number): number {
+  const item = SIM_CATALOG[productType];
+  return Math.max(0, Math.round(item.crateCost * Math.max(0, qty)));
+}
+
+export function calculateCustomerDemandMultiplier(
+  productType: SimProductType,
+  setPrice: number
+): { accepted: boolean; fairLabel: 'Bargain' | 'Fair Value' | 'Overpriced' } {
+  const base = SIM_CATALOG[productType].baseBarterPrice;
+  const ratio = setPrice / base;
+  if (ratio <= 0.9) return { accepted: true, fairLabel: 'Bargain' };
+  if (ratio <= 1.35) return { accepted: true, fairLabel: 'Fair Value' };
+  return { accepted: ratio <= 1.6 && Math.random() < 0.35, fairLabel: 'Overpriced' };
+}
+
+export function calculateTradeReward(
+  items: { productType: SimProductType; qty: number; unitPrice: number }[],
+  activeEvent: DynamicWorldEvent | null
+): { shells: number; knowledge: number; myth: number; xp: number; mythSurgeGain: number } {
+  let shells = 0;
+  let knowledge = 0;
+  let myth = 0;
+  let totalUnits = 0;
+
+  for (const item of items) {
+    const meta = SIM_CATALOG[item.productType];
+    shells += item.qty * item.unitPrice;
+    knowledge += item.qty * meta.knowledgePerSale;
+    myth += item.qty * meta.mythPerSale;
+    totalUnits += item.qty;
+  }
+
+  if (activeEvent?.active) {
+    knowledge = Math.round(knowledge * (activeEvent.perkMultiplier.knowledge || 1));
+    shells = Math.round(shells * (activeEvent.perkMultiplier.amber || 1));
+  }
+
+  return {
+    shells,
+    knowledge,
+    myth,
+    xp: 12 + totalUnits * 6,
+    mythSurgeGain: Math.min(35, 8 + totalUnits * 5),
+  };
+}
+
+export function applyCampXp(
+  currentLevel: number,
+  currentXp: number,
+  nextLevelXp: number,
+  gainedXp: number
+): { level: number; xp: number; nextLevelXp: number; leveledUp: boolean } {
+  let level = currentLevel;
+  let xp = currentXp + gainedXp;
+  let threshold = nextLevelXp;
+  let leveledUp = false;
+
+  while (xp >= threshold) {
+    xp -= threshold;
+    level += 1;
+    threshold = Math.round(threshold * 1.45);
+    leveledUp = true;
+  }
+
+  return { level, xp, nextLevelXp: threshold, leveledUp };
+}
+
+export function isPlacementValid(
+  x: number,
+  z: number,
+  expansionTier: number,
+  existingPositions: { x: number; z: number }[]
+): boolean {
+  const tierInfo = SIM_EXPANSIONS.find(e => e.tier === expansionTier) || SIM_EXPANSIONS[0];
+  const bound = tierInfo.radius - 2.2;
+  if (Math.abs(x) > bound || Math.abs(z) > bound) return false;
+  // Keep center campfire (0, 0) and barter counter (4.6, 3.8) clear
+  if (Math.hypot(x, z) < 2.6) return false;
+  if (Math.hypot(x - 4.6, z - 3.8) < 3.0) return false;
+  // Keep supply dock area clear
+  if (Math.abs(x - (-8.5)) < 3.2 && Math.abs(z - 7.5) < 3.2) return false;
+
+  for (const pos of existingPositions) {
+    if (Math.hypot(x - pos.x, z - pos.z) < 2.4) return false;
+  }
+  return true;
 }
 
 

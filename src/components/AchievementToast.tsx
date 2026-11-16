@@ -30,8 +30,8 @@ export const AchievementToast: React.FC<AchievementToastProps> = ({
 
   return (
     <div
-      className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-auto max-w-md w-[92vw] transition-all duration-300 transform ${
-        isVisible ? 'translate-y-0 opacity-100 scale-100' : '-translate-y-6 opacity-0 scale-95'
+      className={`fixed top-20 right-4 z-50 pointer-events-auto max-w-sm w-[90vw] transition-all duration-300 transform ${
+        isVisible ? 'translate-x-0 opacity-100 scale-100' : 'translate-x-6 opacity-0 scale-95'
       }`}
     >
       <div className="bg-stone-900 border-2 border-amber-500/90 rounded-xl shadow-2xl p-4 text-stone-100 flex gap-3.5 items-start relative overflow-hidden">
