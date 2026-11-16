@@ -1,0 +1,19 @@
+name: Roblox starter checks
+on:
+  pull_request:
+    paths: ['roblox/**', '.github/workflows/roblox.yml']
+  push:
+    paths: ['roblox/**', '.github/workflows/roblox.yml']
+jobs:
+  rules-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r roblox/requirements-dev.txt
+      - run: python roblox/tools/make_audio.py
+      - run: python roblox/tools/build_place.py
+      - run: python roblox/tests/test_rules.py
+      - run: git diff --exit-code -- roblox/SapiensForest.rbxlx

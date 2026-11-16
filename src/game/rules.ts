@@ -26,6 +26,16 @@ export const INITIAL_RESOURCES: GameResources = {
 
 export const HISTORICAL_DILEMMAS: HistoricalDilemma[] = [
   {
+    id: 'open_observatory', era: 'scientific', title: 'Who can use the observatory?',
+    historicalContext: 'Your settlement has built an observatory. The council must decide whether its records should circulate widely or support a smaller group of specialists. This is a fictional scenario about access to knowledge.',
+    bookQuote: '', chapterRef: 'Original game scenario',
+    choices: [
+      {id:'share_observations',label:'Share the records',description:'Invite others to compare observations and question results.',harariTheory:'Open exchange can encourage criticism and new ideas.',effects:{knowledge:60,mythPower:10,flintAndStone:-20}},
+      {id:'fund_specialists',label:'Fund specialist instruments',description:'Focus resources on accurate tools for a smaller research team.',harariTheory:'Specialization trades broad access for concentrated expertise.',effects:{knowledge:40,flintAndStone:25,calories:-35}},
+    ],
+  },
+
+  {
     id: 'gossip_vs_foraging',
     era: 'cognitive',
     title: 'The Gossip Revolution vs. Pure Foraging',
@@ -842,8 +852,8 @@ export const INITIAL_ACHIEVEMENTS: Achievement[] = [
   },
   {
     id: 'megafauna_down',
-    title: 'Megafauna Hunter',
-    description: 'Coordinate a successful hunt against giant woolly mammoths.',
+    title: 'Winter Food Reserve',
+    description: 'Gather supplies and store at least 250 food and 60 flint.',
     icon: '🦣',
     era: 'cognitive',
     funFact: 'Wherever Sapiens settled—Australia, the Americas, and Eurasia—over 70% of all large terrestrial animal species vanished within a few thousand years.',
@@ -933,7 +943,7 @@ export function checkNewAchievements(
         shouldUnlock = unlockedTechs.includes('shared_fiction') || resources.mythPower >= 50;
         break;
       case 'megafauna_down':
-        shouldUnlock = resources.flintAndStone >= 60 && resources.calories >= 250;
+        shouldUnlock = stats.pickupsCollected >= 1 && resources.flintAndStone >= 60 && resources.calories >= 250;
         break;
       case 'luxury_trap':
         shouldUnlock = unlockedTechs.includes('emmer_cultivation');
